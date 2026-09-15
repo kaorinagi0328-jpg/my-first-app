@@ -1,8 +1,8 @@
 :root {
     color-scheme: dark;
     font-family: "Trebuchet MS", "Yu Gothic", sans-serif;
-    background: #11152d;
-    color: #f7f4ff;
+    background: #5d3d91;
+    color: #fff8ff;
 }
 
 * {
@@ -14,8 +14,8 @@ body {
     margin: 0;
     padding: 24px;
     background:
-        radial-gradient(circle at 15% 15%, #293465 0, transparent 28%),
-        linear-gradient(145deg, #11152d, #1d1237 70%, #3b1c50);
+        radial-gradient(circle at 15% 15%, #f7b6df 0, transparent 30%),
+        linear-gradient(145deg, #5b8fe4, #a66bd0 58%, #f080b7);
 }
 
 .game-shell {
@@ -33,7 +33,7 @@ body {
 
 .eyebrow {
     margin: 0 0 4px;
-    color: #77e4d1;
+    color: #9ff8ec;
     font-size: 0.75rem;
     font-weight: bold;
     letter-spacing: 0.16em;
@@ -54,10 +54,10 @@ h1 {
 .game-frame {
     position: relative;
     overflow: hidden;
-    border: 3px solid #6554a6;
+    border: 3px solid #f18ec7;
     border-radius: 18px;
-    background: #191938;
-    box-shadow: 0 18px 45px #08081799, 0 0 0 5px #1e1942;
+    background: #251b4d;
+    box-shadow: 0 18px 45px #180d3099, 0 0 0 5px #5e347d;
 }
 
 canvas {
@@ -92,10 +92,10 @@ canvas {
 }
 
 button {
-    border: 1px solid #887bd0;
+    border: 1px solid #ffb6dc;
     border-radius: 999px;
     padding: 9px 18px;
-    background: #6554a6;
+    background: #d85fa8;
     color: #fff;
     cursor: pointer;
     font: inherit;
@@ -103,7 +103,7 @@ button {
 
 button:hover,
 button:focus-visible {
-    background: #806ed0;
+    background: #ed78bb;
 }
 
 @media (max-width: 620px) {

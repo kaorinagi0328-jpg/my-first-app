@@ -123,8 +123,9 @@ function updateProgress() {
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    sky.addColorStop(0, "#171b46");
-    sky.addColorStop(1, "#51306b");
+    sky.addColorStop(0, "#73d9f5");
+    sky.addColorStop(0.55, "#b9a4f5");
+    sky.addColorStop(1, "#ff9fcf");
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -140,7 +141,7 @@ function draw() {
 }
 
 function drawBackground() {
-    ctx.fillStyle = "#252356";
+    ctx.fillStyle = "#7771c0";
     for (let x = -200; x < WORLD_WIDTH; x += 300) {
         ctx.beginPath();
         ctx.moveTo(x, 455);
@@ -148,45 +149,57 @@ function drawBackground() {
         ctx.lineTo(x + 360, 455);
         ctx.fill();
     }
-    ctx.fillStyle = "#f8e8a9";
+    ctx.fillStyle = "#fff6c7";
     for (let x = 80; x < WORLD_WIDTH; x += 280) {
         ctx.beginPath();
         ctx.arc(x, 85 + (x % 3) * 20, 2, 0, Math.PI * 2);
         ctx.fill();
     }
+    for (let x = 190; x < WORLD_WIDTH; x += 520) {
+        drawCloud(x, 135 + (x % 2) * 55);
+    }
 }
 
 function drawPlatform(platform) {
-    ctx.fillStyle = "#2e2351";
+    ctx.fillStyle = "#3a2861";
     ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
-    ctx.fillStyle = "#54c6a9";
+    ctx.fillStyle = "#7ee8d2";
     ctx.fillRect(platform.x, platform.y, platform.width, 9);
-    ctx.fillStyle = "#3f8b7e";
+    ctx.fillStyle = "#d6a7f4";
     ctx.fillRect(platform.x, platform.y + 9, platform.width, 5);
 }
 
 function drawPlayer(player) {
-    ctx.fillStyle = "#ffcf67";
-    ctx.fillRect(player.x, player.y, player.width, player.height);
-    ctx.fillStyle = "#33285d";
-    ctx.fillRect(player.x + 6, player.y + 10, 5, 5);
-    ctx.fillRect(player.x + 18, player.y + 10, 5, 5);
-    ctx.fillStyle = "#ff7d8a";
-    ctx.fillRect(player.x - 4, player.y + 5, 5, 18);
-    ctx.fillStyle = "#f58e58";
-    ctx.fillRect(player.x + 4, player.y + player.height, 8, 4);
+    ctx.fillStyle = "#ff9fcf";
+    ctx.beginPath();
+    ctx.arc(player.x + 14, player.y + 15, 14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff1fb";
+    ctx.fillRect(player.x + 4, player.y + 24, 20, 15);
+    ctx.fillStyle = "#5a3679";
+    ctx.fillRect(player.x + 8, player.y + 14, 4, 5);
+    ctx.fillRect(player.x + 18, player.y + 14, 4, 5);
+    ctx.fillStyle = "#f36eae";
+    ctx.fillRect(player.x - 4, player.y + 7, 5, 17);
+    ctx.fillRect(player.x + 27, player.y + 7, 5, 17);
+    drawHeart(player.x + 14, player.y + 30, 5, "#ff77bb");
+    ctx.fillStyle = "#d979c7";
+    ctx.fillRect(player.x + 3, player.y + player.height, 8, 4);
     ctx.fillRect(player.x + 18, player.y + player.height, 8, 4);
 }
 
 function drawEnemy(enemy) {
-    ctx.fillStyle = "#ee687f";
-    ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+    ctx.fillStyle = "#8f72db";
+    ctx.beginPath();
+    ctx.arc(enemy.x + 16, enemy.y + 18, 17, 0, Math.PI * 2);
+    ctx.fill();
     ctx.fillStyle = "#fff";
-    ctx.fillRect(enemy.x + 6, enemy.y + 9, 7, 7);
-    ctx.fillRect(enemy.x + 20, enemy.y + 9, 7, 7);
-    ctx.fillStyle = "#33285d";
-    ctx.fillRect(enemy.x + 8, enemy.y + 11, 3, 3);
-    ctx.fillRect(enemy.x + 22, enemy.y + 11, 3, 3);
+    ctx.fillRect(enemy.x + 6, enemy.y + 12, 7, 7);
+    ctx.fillRect(enemy.x + 20, enemy.y + 12, 7, 7);
+    ctx.fillStyle = "#49316d";
+    ctx.fillRect(enemy.x + 8, enemy.y + 14, 3, 3);
+    ctx.fillRect(enemy.x + 22, enemy.y + 14, 3, 3);
+    drawHeart(enemy.x + 16, enemy.y + 29, 4, "#ffabc9");
 }
 
 function drawStar(x, y) {
@@ -205,13 +218,32 @@ function drawStar(x, y) {
 
 function drawGoal() {
     const { x, y } = gameState.goal;
-    ctx.fillStyle = "#f4e7bc";
+    ctx.fillStyle = "#fff0b5";
     ctx.fillRect(x, y, 7, 60);
-    ctx.fillStyle = "#ff7d8a";
+    ctx.fillStyle = "#ff83bd";
     ctx.beginPath();
     ctx.moveTo(x + 7, y);
     ctx.lineTo(x + 58, y + 16);
     ctx.lineTo(x + 7, y + 32);
+    ctx.fill();
+    drawHeart(x + 30, y - 18, 10, "#ffdb74");
+}
+
+function drawHeart(x, y, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y + size);
+    ctx.bezierCurveTo(x - size * 1.6, y, x - size, y - size, x, y);
+    ctx.bezierCurveTo(x + size, y - size, x + size * 1.6, y, x, y + size);
+    ctx.fill();
+}
+
+function drawCloud(x, y) {
+    ctx.fillStyle = "#ffffffaa";
+    ctx.beginPath();
+    ctx.arc(x, y, 22, 0, Math.PI * 2);
+    ctx.arc(x + 25, y - 10, 30, 0, Math.PI * 2);
+    ctx.arc(x + 60, y, 22, 0, Math.PI * 2);
     ctx.fill();
 }
 
