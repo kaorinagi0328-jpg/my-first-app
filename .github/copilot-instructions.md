@@ -24,7 +24,7 @@ There are no individual tests to run. For behavior changes, manually exercise mo
 - Use the existing plain JavaScript style: module-level constants for immutable level configuration, a `gameState` object for mutable runtime state, small functions for update/draw responsibilities, and `requestAnimationFrame(gameLoop)` for the main loop.
 - World coordinates are separate from the 960x540 canvas viewport. Update world entities in `gameState`, use `cameraX` for horizontal scrolling, and draw world content inside the existing translated canvas context.
 - Add level geometry to `platforms` and entity starting positions to `createState()`. Resettable state belongs in `createState()` so `resetGame()` can reliably restore a complete stage.
-- Preserve the current keyboard aliases (`ArrowLeft`/`ArrowRight` and `a`/`d` for movement; `Space`/`ArrowUp` and `w` for jumping) and prevent browser scrolling for handled keys.
+- Preserve the current keyboard aliases (`ArrowLeft`/`ArrowRight` and `a`/`d` for movement; `Space`/`ArrowUp` and `w` for the two-stage jump) and prevent browser scrolling for handled keys. A jump input is consumed on its press edge, not repeatedly while held.
 - Preserve the terminal-state flow: `gameState.won` and `gameState.lost` stop updates, while the status overlay communicates the result and reset clears it.
 - Use the existing DOM IDs (`gameCanvas`, `status`, `progress`, and `restartButton`) when connecting UI to the game. Update the star counter through `updateProgress()` rather than duplicating its calculation.
 - Keep visual constants and drawing logic consistent with the current pixel-art aesthetic. Do not introduce image or library dependencies unless the project is intentionally converted away from its current dependency-free setup.

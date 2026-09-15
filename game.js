@@ -9,6 +9,7 @@ const GRAVITY = 0.65;
 const keys = new Set();
 let cameraX = 0;
 let gameState;
+let jumpWasPressed = false;
 
 const platforms = [
     { x: 0, y: 455, width: 700, height: 85 },
@@ -26,7 +27,7 @@ const platforms = [
 
 function createState() {
     return {
-        player: { x: 90, y: 380, width: 28, height: 42, vx: 0, vy: 0, grounded: false },
+        player: { x: 90, y: 380, width: 28, height: 42, vx: 0, vy: 0, grounded: false, jumpsUsed: 0 },
         enemies: [
             { x: 1040, y: 375, width: 32, height: 35, vx: 1.1, left: 900, right: 1160 },
         ],
@@ -44,6 +45,7 @@ function createState() {
 function resetGame() {
     gameState = createState();
     cameraX = 0;
+    jumpWasPressed = false;
     status.textContent = "";
     updateProgress();
 }
@@ -65,10 +67,13 @@ function update() {
     player.vx *= direction ? 0.84 : 0.78;
     player.vx = Math.max(-5, Math.min(5, player.vx));
 
-    if (isDown(" ", "ArrowUp", "w") && player.grounded) {
+    const jumpPressed = isDown(" ", "ArrowUp", "w");
+    if (jumpPressed && !jumpWasPressed && player.jumpsUsed < 2) {
         player.vy = -12;
         player.grounded = false;
+        player.jumpsUsed += 1;
     }
+    jumpWasPressed = jumpPressed;
 
     player.vy += GRAVITY;
     const previousBottom = player.y + player.height;
@@ -84,6 +89,7 @@ function update() {
             player.y = platform.y - player.height;
             player.vy = 0;
             player.grounded = true;
+            player.jumpsUsed = 0;
         }
     }
 
