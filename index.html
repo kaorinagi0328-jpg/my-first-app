@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Star Runner</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <main class="game-shell">
+        <header class="game-header">
+            <div>
+                <p class="eyebrow">SIDE-SCROLL ACTION MVP</p>
+                <h1>Star Runner</h1>
+            </div>
+            <p class="controls">移動: ← → / A D　ジャンプ: Space / W</p>
+        </header>
+
+        <section class="game-frame" aria-label="Star Runner ゲーム画面">
+            <canvas id="gameCanvas" width="960" height="540"></canvas>
+            <div id="status" class="status" role="status" aria-live="polite"></div>
+        </section>
+
+        <div class="game-footer">
+            <span id="progress">スター: 0 / 3</span>
+            <button id="restartButton" type="button">最初から</button>
+        </div>
+    </main>
+    <script src="game.js"></script>
+</body>
+</html>
