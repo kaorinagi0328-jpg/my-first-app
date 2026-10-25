@@ -128,6 +128,27 @@ function scheduleModel(notes, onEnded) {
 }
 
 // ---------- ピアノロール ----------
+// 生の検出値は細かく震えるので、表示と採点の前に中央値フィルタでならす
+function smoothTrace(trace, windowSize = 7) {
+  if (!trace || trace.length < 3) return trace || [];
+  const half = Math.floor(windowSize / 2);
+  return trace.map((p, i) => {
+    const vals = [];
+    for (let j = Math.max(0, i - half); j <= Math.min(trace.length - 1, i + half); j++) vals.push(trace[j].midiF);
+    vals.sort((a, b) => a - b);
+    return { beat: p.beat, midiF: vals[Math.floor(vals.length / 2)] };
+  });
+}
+function roundRectPath(ctx, rx, ry, rw, rh, r) {
+  const rr = Math.min(r, rw / 2, rh / 2);
+  ctx.beginPath();
+  ctx.moveTo(rx + rr, ry);
+  ctx.arcTo(rx + rw, ry, rx + rw, ry + rh, rr);
+  ctx.arcTo(rx + rw, ry + rh, rx, ry + rh, rr);
+  ctx.arcTo(rx, ry + rh, rx, ry, rr);
+  ctx.arcTo(rx, ry, rx + rw, ry, rr);
+  ctx.closePath();
+}
 function drawRoll(notes, sung, playheadBeat) {
   const c = $("roll"), ctx = c.getContext("2d");
   const W = c.width, H = c.height; ctx.clearRect(0, 0, W, H);
@@ -135,27 +156,66 @@ function drawRoll(notes, sung, playheadBeat) {
   const totalBeats = Math.max(...notes.map((n) => n.start + n.dur));
   const midis = notes.map((n) => n.midi);
   const lo = Math.min(...midis) - 3, hi = Math.max(...midis) + 3;
-  const x = (beat) => (beat / totalBeats) * W;
-  const y = (midiF) => H - ((midiF - lo) / (hi - lo)) * H;
-  ctx.fillStyle = "#374151";
-  notes.forEach((n) => { ctx.fillRect(x(n.start), y(n.midi + 0.5), x(n.start + n.dur) - x(n.start) - 1, y(n.midi - 0.5) - y(n.midi + 0.5)); });
+  const PAD_L = 52, PAD_R = 10, PAD_T = 10, PAD_B = 10;
+  const x = (beat) => PAD_L + (beat / totalBeats) * (W - PAD_L - PAD_R);
+  const y = (midiF) => PAD_T + (1 - (midiF - lo) / (hi - lo)) * (H - PAD_T - PAD_B);
+  // 目盛り: 横=1半音ごとの線と音名、縦=1拍ごとの線
+  ctx.font = "12px system-ui, sans-serif"; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for (let m = Math.ceil(lo); m <= Math.floor(hi); m++) {
+    const isC = ((m % 12) + 12) % 12 === 0;
+    ctx.strokeStyle = isC ? "rgba(255,255,255,.35)" : "rgba(255,255,255,.10)";
+    ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(PAD_L, y(m)); ctx.lineTo(W - PAD_R, y(m)); ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,.85)";
+    ctx.fillText(NOTE_NAMES[((m % 12) + 12) % 12], PAD_L - 6, y(m));
+  }
+  ctx.strokeStyle = "rgba(255,255,255,.14)";
+  for (let b = 0; b <= totalBeats; b++) { ctx.beginPath(); ctx.moveTo(x(b), PAD_T); ctx.lineTo(x(b), H - PAD_B); ctx.stroke(); }
+  // お手本の音符: 角丸ブロック + ドレミ表記
+  const drawNote = (n, fill) => {
+    const nx = x(n.start) + 1, nw = Math.max(6, x(n.start + n.dur) - x(n.start) - 2);
+    const ny = y(n.midi + 0.42), nh = y(n.midi - 0.42) - ny;
+    roundRectPath(ctx, nx, ny, nw, nh, 5); ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.55)"; ctx.lineWidth = 1; ctx.stroke();
+    if (nw >= 26) {
+      ctx.fillStyle = "#fff"; ctx.font = "bold 12px system-ui, sans-serif"; ctx.textAlign = "center";
+      ctx.fillText(NOTE_NAMES[((n.midi % 12) + 12) % 12], nx + nw / 2, ny + nh / 2 + 0.5);
+      ctx.textAlign = "right"; ctx.font = "12px system-ui, sans-serif";
+    }
+  };
+  notes.forEach((n) => drawNote(n, "#64748b"));
   if (sung && sung.scored) {
-    sung.scored.forEach((s, i) => {
-      ctx.fillStyle = s.ok ? "rgba(34,197,94,.75)" : "rgba(239,68,68,.75)";
-      const n = notes[i];
-      ctx.fillRect(x(n.start), y(n.midi + 0.5), x(n.start + n.dur) - x(n.start) - 1, y(n.midi - 0.5) - y(n.midi + 0.5));
-    });
+    sung.scored.forEach((s, i) => drawNote(notes[i], s.ok ? "rgba(34,197,94,.88)" : "rgba(239,68,68,.88)"));
   }
+  // 歌った音: なめらかにした太い線。無音や大きな跳躍では線を切る
   if (sung && sung.trace && sung.trace.length) {
-    ctx.strokeStyle = "#facc15"; ctx.lineWidth = 2; ctx.beginPath();
-    sung.trace.forEach((p, i) => { const px = x(p.beat), py = y(p.midiF); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
-    ctx.stroke();
+    const trace = smoothTrace(sung.trace);
+    const segments = []; let cur = [trace[0]];
+    for (let i = 1; i < trace.length; i++) {
+      const gap = trace[i].beat - trace[i - 1].beat;
+      const jump = Math.abs(trace[i].midiF - trace[i - 1].midiF);
+      if (gap > 0.45 || jump > 4) { segments.push(cur); cur = []; }
+      cur.push(trace[i]);
+    }
+    segments.push(cur);
+    ctx.lineJoin = "round"; ctx.lineCap = "round";
+    for (const seg of segments) {
+      if (!seg.length) continue;
+      for (const [width, style] of [[8, "rgba(0,0,0,.5)"], [4.5, "#fde047"]]) {
+        ctx.strokeStyle = style; ctx.lineWidth = width; ctx.beginPath();
+        seg.forEach((p, i) => { const px = x(p.beat), py = y(p.midiF); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
+        if (seg.length === 1) ctx.lineTo(x(seg[0].beat) + 0.1, y(seg[0].midiF));
+        ctx.stroke();
+      }
+      ctx.fillStyle = "#fde047";
+      seg.forEach((p) => { ctx.beginPath(); ctx.arc(x(p.beat), y(p.midiF), 2.2, 0, Math.PI * 2); ctx.fill(); });
+    }
   }
-  if (playheadBeat != null) { ctx.strokeStyle = "#fff"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x(playheadBeat), 0); ctx.lineTo(x(playheadBeat), H); ctx.stroke(); }
+  if (playheadBeat != null) { ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x(playheadBeat), PAD_T); ctx.lineTo(x(playheadBeat), H - PAD_B); ctx.stroke(); }
 }
 
 // ---------- 採点 ----------
-function scorePerformance(notes, trace) {
+function scorePerformance(notes, rawTrace) {
+  const trace = smoothTrace(rawTrace);
   const scored = notes.map((n) => {
     const samples = trace.filter((p) => p.beat >= n.start + n.dur * 0.2 && p.beat <= n.start + n.dur * 0.9)
       .map((p) => p.midiF).sort((a, b) => a - b);
@@ -217,7 +277,7 @@ $("singBtn").addEventListener("click", async () => {
   $("status").textContent = "用意… お手本に合わせて歌ってください";
   const s = scheduleModel(notes, finish);
   playing = s; $("stopBtn").disabled = false;
-  const trace = []; const spb = secPerBeat(); let done = false;
+  const trace = []; const spb = secPerBeat(); let done = false; const recent = [];
   function finish() {
     if (done) return; done = true;
     stream.getTracks().forEach((t) => t.stop()); $("stopBtn").disabled = true;
@@ -241,9 +301,13 @@ $("singBtn").addEventListener("click", async () => {
     analyser.getFloatTimeDomainData(buf);
     const f = detectPitch(buf, ctx.sampleRate);
     const beat = (ctx.currentTime - s.startAt) / spb;
-    if (f && beat >= 0) {
-      const midiF = freqToMidiFloat(f); trace.push({ beat, midiF });
-      $("livePitch").textContent = "いまの音: " + NOTE_NAMES[Math.round(midiF) % 12] + "（" + Math.round(f) + "Hz）";
+    if (f && f >= 65 && f <= 1300 && beat >= 0) {
+      // 直近5回の中央値で1回だけの検出ミス(オクターブ跳び等)を消す
+      recent.push(freqToMidiFloat(f)); if (recent.length > 5) recent.shift();
+      const sorted = [...recent].sort((a, b) => a - b);
+      const midiF = sorted[Math.floor(sorted.length / 2)];
+      trace.push({ beat, midiF });
+      $("livePitch").textContent = "いまの音: " + NOTE_NAMES[((Math.round(midiF) % 12) + 12) % 12];
     }
     drawRoll(notes, { trace }, Math.max(0, beat));
     requestAnimationFrame(tick);
