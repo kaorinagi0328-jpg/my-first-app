@@ -25,11 +25,13 @@ function notesFromPairs(pairs, offset = 0) {
   for (const [midi, dur] of pairs) { out.push({ midi, start: t, dur }); t += dur; }
   return out;
 }
+const FROG_LYRICS = ["か","え","る","の","う","た","が","き","こ","え","て","く","る","よ","クワ","クワ","クワ","クワ","ケロ","ケロ","ケロ","ケロ","クワ","クワ","クワ","クワ"];
 function sampleSong() {
+  const main = notesFromPairs(FROG_MELODY).map((n, i) => ({ ...n, lyric: FROG_LYRICS[i] || null }));
   return {
     title: "かえるの合唱（サンプル）", bpm: 100, beatsPerMeasure: 4,
     parts: [
-      { name: "主旋律", notes: notesFromPairs(FROG_MELODY) },
+      { name: "主旋律", notes: main },
       { name: "輪唱（2小節おくれ）", notes: notesFromPairs(FROG_MELODY, 8) },
     ],
   };
@@ -74,7 +76,8 @@ function parseMusicXML(text) {
             const alter = parseFloat(el.querySelector("pitch > alter")?.textContent || 0);
             const octave = parseFloat(el.querySelector("pitch > octave")?.textContent || 4);
             if (step && STEP[step] !== undefined) {
-              notes.push({ midi: (octave + 1) * 12 + STEP[step] + alter, start, dur });
+              const lyric = el.querySelector("lyric > text")?.textContent || null;
+              notes.push({ midi: (octave + 1) * 12 + STEP[step] + alter, start, dur, lyric });
             }
           }
           if (!isChord) { mCursor += dur; if (mCursor > maxEnd) maxEnd = mCursor; }
@@ -189,7 +192,7 @@ function roundRectPath(ctx, rx, ry, rw, rh, r) {
   ctx.arcTo(rx, ry, rx + rw, ry, rr);
   ctx.closePath();
 }
-function drawRoll(notes, sung, playheadBeat, overlayText) {
+function drawRoll(notes, sung, playheadBeat, overlayText, view) {
   const c = $("roll"), ctx = c.getContext("2d");
   const W = c.width, H = c.height; ctx.clearRect(0, 0, W, H);
   if (!notes.length) return;
@@ -197,7 +200,11 @@ function drawRoll(notes, sung, playheadBeat, overlayText) {
   const midis = notes.map((n) => n.midi);
   const lo = Math.min(...midis) - 3, hi = Math.max(...midis) + 3;
   const PAD_L = 52, PAD_R = 10, PAD_T = 10, PAD_B = 10;
-  const x = (beat) => PAD_L + (beat / totalBeats) * (W - PAD_L - PAD_R);
+  // 再生中は4小節分だけを拡大表示して現在位置を追う (view={start,span})
+  const vStart = view ? view.start : 0;
+  const vSpan = view ? view.span : totalBeats;
+  const x = (beat) => PAD_L + ((beat - vStart) / vSpan) * (W - PAD_L - PAD_R);
+  const curIdx = (playheadBeat != null && playheadBeat >= 0) ? notes.findIndex((n) => playheadBeat >= n.start && playheadBeat < n.start + n.dur) : -1;
   const y = (midiF) => PAD_T + (1 - (midiF - lo) / (hi - lo)) * (H - PAD_T - PAD_B);
   // 目盛り: 横=1半音ごとの線と音名、縦=1拍ごとの線
   ctx.font = "12px system-ui, sans-serif"; ctx.textAlign = "right"; ctx.textBaseline = "middle";
@@ -226,6 +233,18 @@ function drawRoll(notes, sung, playheadBeat, overlayText) {
   if (sung && sung.scored) {
     sung.scored.forEach((s, i) => drawNote(notes[i], s.ok ? "rgba(34,197,94,.88)" : "rgba(239,68,68,.88)"));
   }
+  // いま鳴っている音は大きく明るく描き直す
+  if (curIdx >= 0) {
+    const n = notes[curIdx];
+    const nx = x(n.start) + 1, nw = Math.max(10, x(n.start + n.dur) - x(n.start) - 2);
+    const ny = y(n.midi + 0.75), nh = y(n.midi - 0.75) - ny;
+    ctx.save(); ctx.shadowColor = "#fde047"; ctx.shadowBlur = 18;
+    roundRectPath(ctx, nx, ny, nw, nh, 7); ctx.fillStyle = "#facc15"; ctx.fill(); ctx.restore();
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 2.5; roundRectPath(ctx, nx, ny, nw, nh, 7); ctx.stroke();
+    ctx.fillStyle = "#111"; ctx.font = "bold 15px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(NOTE_NAMES[((n.midi % 12) + 12) % 12], nx + nw / 2, ny + nh / 2 + 0.5);
+    ctx.textAlign = "right"; ctx.font = "12px system-ui, sans-serif";
+  }
   // 歌った音: なめらかにした太い線。無音や大きな跳躍では線を切る
   if (sung && sung.trace && sung.trace.length) {
     const trace = smoothTrace(sung.trace);
@@ -250,7 +269,10 @@ function drawRoll(notes, sung, playheadBeat, overlayText) {
       seg.forEach((p) => { ctx.beginPath(); ctx.arc(x(p.beat), y(p.midiF), 2.2, 0, Math.PI * 2); ctx.fill(); });
     }
   }
-  if (playheadBeat != null && playheadBeat >= 0) { ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x(playheadBeat), PAD_T); ctx.lineTo(x(playheadBeat), H - PAD_B); ctx.stroke(); }
+  if (playheadBeat != null && playheadBeat >= 0) {
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 3.5; ctx.beginPath(); ctx.moveTo(x(playheadBeat), PAD_T); ctx.lineTo(x(playheadBeat), H - PAD_B); ctx.stroke();
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.moveTo(x(playheadBeat) - 8, PAD_T); ctx.lineTo(x(playheadBeat) + 8, PAD_T); ctx.lineTo(x(playheadBeat), PAD_T + 12); ctx.closePath(); ctx.fill();
+  }
   if (overlayText) {
     ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.beginPath(); ctx.arc(W / 2, H / 2, 52, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = "#fff"; ctx.font = "bold 64px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -277,6 +299,61 @@ function scorePerformance(notes, rawTrace) {
   return { scored, total };
 }
 
+// ---------- 練習サポート（途中から・歌詞・現在位置） ----------
+let lastCurIdx = -2;
+function segmentNotes() {
+  const all = selectedPart().notes;
+  const sb = (Number($("startMeasure").value || 1) - 1) * (song.beatsPerMeasure || 4);
+  if (!sb) return all;
+  return all.filter((n) => n.start >= sb - 1e-9).map((n) => ({ ...n, start: n.start - sb }));
+}
+function pageView(beat, notes) {
+  const total = Math.max(...notes.map((n) => n.start + n.dur));
+  const span = (song.beatsPerMeasure || 4) * 4; // 4小節分を拡大表示
+  if (total <= span) return null;
+  let start = Math.floor(Math.max(0, beat) / span) * span;
+  if (total - start < span) start = total - span;
+  return { start, span };
+}
+function buildLyrics(notes) {
+  lastCurIdx = -2;
+  const strip = $("lyricStrip");
+  const withL = notes.map((n, i) => ({ n, i })).filter(({ n }) => n.lyric);
+  if (!withL.length) { strip.innerHTML = '<span style="font-size:15px">(この楽譜には歌詞が入っていません)</span>'; $("nowInfo").textContent = ""; return; }
+  strip.innerHTML = withL.map(({ n, i }) => `<span data-i="${i}">${n.lyric}</span>`).join("");
+}
+function updateCurrent(notes, beat) {
+  const idx = beat >= 0 ? notes.findIndex((n) => beat >= n.start && beat < n.start + n.dur) : -1;
+  if (idx === lastCurIdx) return; lastCurIdx = idx;
+  document.querySelectorAll("#lyricStrip span[data-i]").forEach((s) => {
+    const i = Number(s.dataset.i);
+    s.classList.toggle("on", i === idx);
+    s.classList.toggle("done", idx >= 0 && i < idx);
+  });
+  const on = document.querySelector("#lyricStrip span.on");
+  if (on) on.scrollIntoView({ inline: "center", block: "nearest" });
+  const n = idx >= 0 ? notes[idx] : null;
+  $("nowInfo").textContent = n ? "♪ " + NOTE_NAMES[((n.midi % 12) + 12) % 12] + (n.lyric ? " ・ " + n.lyric : "") : "";
+}
+function refreshStartMeasures() {
+  if (!song) return;
+  const meas = Math.max(1, Math.ceil(Math.max(...selectedPart().notes.map((n) => n.start + n.dur)) / (song.beatsPerMeasure || 4)));
+  const sm = $("startMeasure"); const prev = sm.value;
+  sm.innerHTML = "";
+  for (let i = 1; i <= meas; i++) { const o = document.createElement("option"); o.value = i; o.textContent = i + "小節目から"; sm.appendChild(o); }
+  if (Number(prev) >= 1 && Number(prev) <= meas) sm.value = prev;
+}
+
+// ---------- ゲーム要素（経験値・レベル） ----------
+const SAVE_KEY = "karaoke-score-save-v1";
+function loadSave() { try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || { xp: 0, best: {} }; } catch { return { xp: 0, best: {} }; } }
+function storeSave(s) { try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); } catch {} }
+function levelOf(xp) { let lv = 1, rest = xp, need = 80; while (rest >= need) { rest -= need; lv++; need = lv * 80; } return { level: lv, into: rest, need }; }
+function updateLevelInfo() {
+  const s = loadSave(); const L = levelOf(s.xp);
+  $("levelInfo").textContent = "⭐ レベル " + L.level + "（次のレベルまで あと " + (L.need - L.into) + " XP）";
+}
+
 // ---------- 画面の動作 ----------
 function setSong(s) {
   song = s;
@@ -286,9 +363,10 @@ function setSong(s) {
   sel.disabled = false; $("playModel").disabled = false; $("singBtn").disabled = false; $("restartBtn").disabled = false;
   $("status").textContent = "パートを選んで「お手本を聞く」か「歌って採点」を押してください";
   $("resultCard").hidden = true;
+  refreshStartMeasures(); buildLyrics(selectedPart().notes); updateLevelInfo();
   drawRoll(selectedPart().notes, null, null);
 }
-$("partSelect").addEventListener("change", () => { if (song) drawRoll(selectedPart().notes, null, null); });
+$("partSelect").addEventListener("change", () => { if (song) { $("startMeasure").value = "1"; refreshStartMeasures(); buildLyrics(selectedPart().notes); drawRoll(selectedPart().notes, null, null); } });
 $("tempo").addEventListener("input", () => { $("tempoVal").textContent = $("tempo").value; });
 $("loadSample").addEventListener("click", () => setSong(sampleSong()));
 $("fileInput").addEventListener("change", async (e) => {
@@ -299,7 +377,7 @@ $("fileInput").addEventListener("change", async (e) => {
 function stopAll() { if (playing) { playing.stop(); playing = null; } $("stopBtn").disabled = true; }
 $("stopBtn").addEventListener("click", () => { stopAll(); $("status").textContent = "止めました"; });
 function startModel() {
-  stopAll(); mode = "model"; const notes = selectedPart().notes;
+  stopAll(); mode = "model"; const notes = segmentNotes(); buildLyrics(notes);
   const s = scheduleModel(notes, () => { $("status").textContent = "再生が終わりました"; $("stopBtn").disabled = true; });
   playing = s; $("stopBtn").disabled = false;
   $("status").textContent = s.countIn ? "カウントイン… 数字が0になったら始まります" : "お手本を再生中…";
@@ -308,13 +386,14 @@ function startModel() {
     if (playing !== s) return;
     const beat = (ctx.currentTime - s.startAt) / spb;
     if (beat >= 0 && $("status").textContent.startsWith("カウントイン")) $("status").textContent = "お手本を再生中…";
-    drawRoll(notes, null, Math.max(0, beat), beat < 0 ? String(Math.ceil(-beat)) : null);
+    updateCurrent(notes, beat);
+    drawRoll(notes, null, Math.max(0, beat), beat < 0 ? String(Math.ceil(-beat)) : null, pageView(beat, notes));
     if (beat <= Math.max(...notes.map((n) => n.start + n.dur))) requestAnimationFrame(tick);
   })();
 }
 $("playModel").addEventListener("click", startModel);
 async function startSing() {
-  stopAll(); mode = "sing"; const notes = selectedPart().notes;
+  stopAll(); mode = "sing"; const notes = segmentNotes(); buildLyrics(notes);
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
   catch { $("status").textContent = "マイクが使えませんでした。ブラウザのマイク許可を確認してください"; return; }
@@ -340,6 +419,22 @@ async function startSing() {
       ul.appendChild(li);
     });
     $("resultCard").hidden = false;
+    // ゲーム要素: 達成率・スター・最大コンボ・経験値とレベルアップ
+    const okCount = result.scored.filter((r) => r.ok).length;
+    const achieve = Math.round((okCount / Math.max(1, notes.length)) * 100);
+    let combo = 0, maxCombo = 0; result.scored.forEach((r) => { combo = r.ok ? combo + 1 : 0; if (combo > maxCombo) maxCombo = combo; });
+    const stars = result.total >= 90 ? 3 : result.total >= 70 ? 2 : result.total >= 50 ? 1 : 0;
+    const save = loadSave(); const beforeLv = levelOf(save.xp).level;
+    save.xp += result.total;
+    const bestKey = song.title + "|" + selectedPart().name + "|" + $("startMeasure").value;
+    const prevBest = save.best[bestKey] || 0; const isBest = result.total > prevBest;
+    if (isBest) save.best[bestKey] = result.total;
+    storeSave(save); const L = levelOf(save.xp);
+    const praise = result.total >= 90 ? "すごい！完璧にちかいよ！" : result.total >= 70 ? "とても上手！" : result.total >= 50 ? "よくがんばった！" : "れんしゅうあるのみ！次はもっとできるよ";
+    $("gameResult").innerHTML = praise + "<br>" + "★".repeat(stars) + "☆".repeat(3 - stars) + "　達成率 " + achieve + "% ・ 最大コンボ " + maxCombo + " ・ +" + result.total + " XPゲット！" + (L.level > beforeLv ? "<br>🎉 レベルアップ！ レベル " + L.level + " になったよ！" : "") + (isBest && prevBest > 0 ? "<br>🏆 自己ベスト更新！（前: " + prevBest + "点）" : "");
+    $("xpBar").style.width = Math.round((L.into / L.need) * 100) + "%";
+    $("xpInfo").textContent = "レベル " + L.level + " ・ 経験値 " + save.xp + " XP（次のレベルまで あと " + (L.need - L.into) + " XP）";
+    updateLevelInfo();
     $("status").textContent = "採点が終わりました";
     playing = null;
   }
@@ -367,7 +462,8 @@ async function startSing() {
     }
     if (beat < 0) $("livePitch").textContent = "あと " + Math.ceil(-beat) + " 拍でスタート";
     else if (beat >= 0 && $("status").textContent.startsWith("カウントイン")) $("status").textContent = "歌ってください！";
-    drawRoll(notes, { trace }, Math.max(0, beat), beat < 0 ? String(Math.ceil(-beat)) : null);
+    updateCurrent(notes, beat);
+    drawRoll(notes, { trace }, Math.max(0, beat), beat < 0 ? String(Math.ceil(-beat)) : null, pageView(beat, notes));
     requestAnimationFrame(tick);
   })();
 }
@@ -378,3 +474,4 @@ $("restartBtn").addEventListener("click", () => {
   if (playing) playing.noScore = true; // 歌っている途中なら採点せずに切り替える
   if (mode === "sing") startSing(); else startModel();
 });
+updateLevelInfo();
