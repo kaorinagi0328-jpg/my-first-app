@@ -9,6 +9,7 @@ const NOTE_NAMES = ["ド", "ド#", "レ", "レ#", "ミ", "ファ", "ファ#", "�
 let song = null;        // {title, bpm, parts:[{name, notes:[{midi,start,dur}]}]} start/dur は拍単位
 let audioCtx = null;
 let playing = null;     // {stop()} 再生/採点セッション
+let mode = null;        // "model" | "sing" 最後に始めたモード（最初からやり直す用）
 
 // ---------- サンプル曲: かえるの合唱 (輪唱) ----------
 // [midi, 拍数] の並び。主旋律と、2小節(8拍)遅れの輪唱パート
@@ -282,7 +283,7 @@ function setSong(s) {
   $("songTitle").textContent = "曲: " + s.title + "（" + s.parts.length + "パート）";
   const sel = $("partSelect"); sel.innerHTML = "";
   s.parts.forEach((p, i) => { const o = document.createElement("option"); o.value = i; o.textContent = p.name + "（" + p.notes.length + "音）"; sel.appendChild(o); });
-  sel.disabled = false; $("playModel").disabled = false; $("singBtn").disabled = false;
+  sel.disabled = false; $("playModel").disabled = false; $("singBtn").disabled = false; $("restartBtn").disabled = false;
   $("status").textContent = "パートを選んで「お手本を聞く」か「歌って採点」を押してください";
   $("resultCard").hidden = true;
   drawRoll(selectedPart().notes, null, null);
@@ -297,8 +298,8 @@ $("fileInput").addEventListener("change", async (e) => {
 });
 function stopAll() { if (playing) { playing.stop(); playing = null; } $("stopBtn").disabled = true; }
 $("stopBtn").addEventListener("click", () => { stopAll(); $("status").textContent = "止めました"; });
-$("playModel").addEventListener("click", () => {
-  stopAll(); const notes = selectedPart().notes;
+function startModel() {
+  stopAll(); mode = "model"; const notes = selectedPart().notes;
   const s = scheduleModel(notes, () => { $("status").textContent = "再生が終わりました"; $("stopBtn").disabled = true; });
   playing = s; $("stopBtn").disabled = false;
   $("status").textContent = s.countIn ? "カウントイン… 数字が0になったら始まります" : "お手本を再生中…";
@@ -310,9 +311,10 @@ $("playModel").addEventListener("click", () => {
     drawRoll(notes, null, Math.max(0, beat), beat < 0 ? String(Math.ceil(-beat)) : null);
     if (beat <= Math.max(...notes.map((n) => n.start + n.dur))) requestAnimationFrame(tick);
   })();
-});
-$("singBtn").addEventListener("click", async () => {
-  stopAll(); const notes = selectedPart().notes;
+}
+$("playModel").addEventListener("click", startModel);
+async function startSing() {
+  stopAll(); mode = "sing"; const notes = selectedPart().notes;
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
   catch { $("status").textContent = "マイクが使えませんでした。ブラウザのマイク許可を確認してください"; return; }
@@ -341,7 +343,15 @@ $("singBtn").addEventListener("click", async () => {
     $("status").textContent = "採点が終わりました";
     playing = null;
   }
-  s.stopOrig = s.stop; s.stop = () => { s.stopOrig(); finish(); };
+  s.stopOrig = s.stop;
+  s.stop = () => {
+    s.stopOrig();
+    if (s.noScore) { // 最初からやり直すときは採点せずにマイクだけ止める
+      if (!done) { done = true; stream.getTracks().forEach((t) => t.stop()); }
+      return;
+    }
+    finish();
+  };
   (function tick() {
     if (done || playing !== s) return;
     analyser.getFloatTimeDomainData(buf);
@@ -360,4 +370,11 @@ $("singBtn").addEventListener("click", async () => {
     drawRoll(notes, { trace }, Math.max(0, beat), beat < 0 ? String(Math.ceil(-beat)) : null);
     requestAnimationFrame(tick);
   })();
+}
+$("singBtn").addEventListener("click", startSing);
+// 練習用: 再生中でも録音中でも、カウントインから最初に戻ってやり直す
+$("restartBtn").addEventListener("click", () => {
+  if (!song) return;
+  if (playing) playing.noScore = true; // 歌っている途中なら採点せずに切り替える
+  if (mode === "sing") startSing(); else startModel();
 });
