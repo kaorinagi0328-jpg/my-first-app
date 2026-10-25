@@ -76,8 +76,9 @@ function parseMusicXML(text) {
             const alter = parseFloat(el.querySelector("pitch > alter")?.textContent || 0);
             const octave = parseFloat(el.querySelector("pitch > octave")?.textContent || 4);
             if (step && STEP[step] !== undefined) {
-              const lyric = el.querySelector("lyric > text")?.textContent || null;
-              notes.push({ midi: (octave + 1) * 12 + STEP[step] + alter, start, dur, lyric });
+              const lyrics = {};
+              el.querySelectorAll("lyric").forEach((ly) => { const t = ly.querySelector("text")?.textContent; if (t) lyrics[ly.getAttribute("number") || "1"] = t; });
+              notes.push({ midi: (octave + 1) * 12 + STEP[step] + alter, start, dur, lyrics, lyric: lyrics["1"] || null });
             }
           }
           if (!isChord) { mCursor += dur; if (mCursor > maxEnd) maxEnd = mCursor; }
@@ -315,8 +316,11 @@ function pageView(beat, notes) {
   if (total - start < span) start = total - span;
   return { start, span };
 }
+let lyricNotes = [];
 function buildLyrics(notes) {
-  lastCurIdx = -2;
+  lyricNotes = notes; lastCurIdx = -2;
+  const v = $("verseSelect") ? $("verseSelect").value : "1";
+  notes.forEach((n) => { if (n.lyrics) n.lyric = n.lyrics[v] || null; });
   const strip = $("lyricStrip");
   const withL = notes.map((n, i) => ({ n, i })).filter(({ n }) => n.lyric);
   if (!withL.length) { strip.innerHTML = '<span style="font-size:15px">(この楽譜には歌詞が入っていません)</span>'; $("nowInfo").textContent = ""; return; }
@@ -367,6 +371,7 @@ function setSong(s) {
   drawRoll(selectedPart().notes, null, null);
 }
 $("partSelect").addEventListener("change", () => { if (song) { $("startMeasure").value = "1"; refreshStartMeasures(); buildLyrics(selectedPart().notes); drawRoll(selectedPart().notes, null, null); } });
+$("verseSelect").addEventListener("change", () => { if (lyricNotes.length) buildLyrics(lyricNotes); });
 $("tempo").addEventListener("input", () => { $("tempoVal").textContent = $("tempo").value; });
 $("loadSample").addEventListener("click", () => setSong(sampleSong()));
 $("fileInput").addEventListener("change", async (e) => {
