@@ -387,10 +387,17 @@ function wuCleanup() {
 function cancelWarmup() { if (wu) { wuCleanup(); $("wuInfo").textContent = "やめました。また挑戦してね"; $("wuTarget").textContent = ""; $("wuResult").textContent = ""; drawGauge(null); } }
 function wuTargets() {
   const notes = selectedPart() ? selectedPart().notes : [];
-  // 読み取りミスの外れ値（1回だけ出てくる極端な音）は出題から外す
+  // 読み取りミスの外れ値だけを外す（1回だけ・音域の端・隣の音から大きく離れた音）。
+  // A♯のような本物の臨時記号の音（隣の音に近い）は出題に残す。
   const freq = {};
   notes.forEach((n) => { freq[n.midi] = (freq[n.midi] || 0) + 1; });
-  let uniq = [...new Set(notes.map((n) => n.midi))].filter((m) => freq[m] >= 2).sort((a, b) => a - b);
+  let uniq = [...new Set(notes.map((n) => n.midi))].sort((a, b) => a - b);
+  uniq = uniq.filter((m, i) => {
+    if (freq[m] >= 2) return true;
+    const near = Math.min(i > 0 ? m - uniq[i - 1] : 99, i < uniq.length - 1 ? uniq[i + 1] - m : 99);
+    const atEdge = i === 0 || i === uniq.length - 1;
+    return !(atEdge && near >= 4);
+  });
   if (uniq.length < 5) uniq = [...new Set(notes.map((n) => n.midi))].sort((a, b) => a - b);
   if (uniq.length <= 5) return uniq.slice();
   const picks = [0, 0.25, 0.5, 0.75, 1].map((f) => uniq[Math.round(f * (uniq.length - 1))]);
