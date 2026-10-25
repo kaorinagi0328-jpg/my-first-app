@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>カラオケ採点アプリ</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>🎤 カラオケ採点アプリ</h1>
+  <p>楽譜を選んで、パートを選んで、歌ってみよう。声はこの端末の中だけで処理されます。</p>
+</header>
+<main>
+  <section class="card">
+    <h2>1. 楽譜</h2>
+    <p>
+      <button id="loadSample" type="button">サンプル曲で試す（かえるの合唱）</button>
+      <label class="file">MusicXMLを選ぶ
+        <input id="fileInput" type="file" accept=".musicxml,.xml,.mxl" hidden>
+      </label>
+    </p>
+    <p id="songTitle" class="muted">まだ楽譜が読み込まれていません</p>
+    <label>パート
+      <select id="partSelect" disabled></select>
+    </label>
+    <label>テンポ <span id="tempoVal">100</span>%
+      <input id="tempo" type="range" min="50" max="150" value="100">
+    </label>
+    <label><input id="octaveOk" type="checkbox" checked> オクターブ違いも正解にする</label>
+  </section>
+
+  <section class="card">
+    <h2>2. 練習と採点</h2>
+    <p>
+      <button id="playModel" type="button" disabled>▶ お手本を聞く</button>
+      <button id="singBtn" type="button" disabled>🎤 歌って採点</button>
+      <button id="stopBtn" type="button" disabled>■ 止める</button>
+    </p>
+    <p id="status" class="muted">まず楽譜を読み込んでください</p>
+    <p id="livePitch" class="live"></p>
+    <canvas id="roll" width="900" height="260"></canvas>
+  </section>
+
+  <section class="card" id="resultCard" hidden>
+    <h2>結果</h2>
+    <p class="score"><span id="scoreNum">-</span> 点</p>
+    <ul id="noteResults"></ul>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+body{font-family:system-ui,-apple-system,"Hiragino Sans",sans-serif;margin:0;background:#f6f7fb;color:#222}
+header{padding:20px 16px 4px;max-width:960px;margin:auto}
+main{max-width:960px;margin:auto;padding:8px 16px 40px;display:grid;gap:16px}
+.card{background:#fff;border-radius:14px;padding:16px 18px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+button,.file{display:inline-block;background:#2563eb;color:#fff;border:0;border-radius:999px;padding:10px 18px;font-size:16px;cursor:pointer;margin:4px 4px 4px 0}
+button:disabled{background:#b6c2d9;cursor:default}
+button#stopBtn{background:#dc2626}
+label{display:block;margin:10px 0}
+select{font-size:16px;padding:6px}
+.muted{color:#666}.live{font-size:22px;font-weight:700;min-height:30px}
+canvas{width:100%;height:auto;background:#111827;border-radius:10px}
+.score{font-size:28px}.score span{font-size:52px;font-weight:800;color:#2563eb}
+#noteResults{line-height:1.8}
