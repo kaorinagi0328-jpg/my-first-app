@@ -107,14 +107,15 @@ const freqToMidiFloat = (f) => 69 + 12 * Math.log2(f / 440);
 
 // ---------- 再生 ----------
 function ensureCtx() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); return audioCtx; }
-function playTone(midi, at, dur, gainVal = 0.18) {
+function playTone(midi, at, dur, dest, gainVal = 0.18) {
   const ctx = ensureCtx(); const f = 440 * Math.pow(2, (midi - 69) / 12);
   const osc = ctx.createOscillator(); const g = ctx.createGain();
   osc.type = "triangle"; osc.frequency.value = f;
   g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(gainVal, at + 0.02);
   g.gain.setValueAtTime(gainVal, at + Math.max(0.05, dur - 0.05));
   g.gain.linearRampToValueAtTime(0, at + dur);
-  osc.connect(g).connect(ctx.destination); osc.start(at); osc.stop(at + dur + 0.05);
+  osc.connect(g).connect(dest || ctx.destination); osc.start(at); osc.stop(at + dur + 0.05);
+  return osc;
 }
 function selectedPart() { return song.parts[Number($("partSelect").value || 0)]; }
 function secPerBeat() { return 60 / (song.bpm * (Number($("tempo").value) / 100)); }
@@ -122,9 +123,22 @@ function songLengthSec(notes) { return Math.max(...notes.map((n) => n.start + n.
 
 function scheduleModel(notes, onEnded) {
   const ctx = ensureCtx(); const startAt = ctx.currentTime + 0.1; const spb = secPerBeat();
-  notes.forEach((n) => playTone(n.midi, startAt + n.start * spb, n.dur * spb));
-  const timer = setTimeout(onEnded, (songLengthSec(notes) + 0.3) * 1000);
-  return { startAt, stop: () => clearTimeout(timer) };
+  // 全ての音を1つのマスター音量経由にし、停止時はマスターを切断+全オシレータ停止で即時に音を止める
+  // (予約済みの音は setTimeout を消すだけでは止まらないため)
+  const master = ctx.createGain(); master.gain.value = 1; master.connect(ctx.destination);
+  const oscs = notes.map((n) => playTone(n.midi, startAt + n.start * spb, n.dur * spb, master));
+  const timer = setTimeout(() => { try { master.disconnect(); } catch {} onEnded(); }, (songLengthSec(notes) + 0.3) * 1000);
+  let stopped = false;
+  return {
+    startAt,
+    stop: () => {
+      if (stopped) return; stopped = true;
+      clearTimeout(timer);
+      try { master.gain.cancelScheduledValues(ctx.currentTime); master.gain.setValueAtTime(0, ctx.currentTime); } catch {}
+      oscs.forEach((o) => { try { o.stop(); } catch {} });
+      try { master.disconnect(); } catch {}
+    },
+  };
 }
 
 // ---------- ピアノロール ----------
