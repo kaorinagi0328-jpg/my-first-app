@@ -76,9 +76,17 @@ function parseMusicXML(text) {
             const alter = parseFloat(el.querySelector("pitch > alter")?.textContent || 0);
             const octave = parseFloat(el.querySelector("pitch > octave")?.textContent || 4);
             if (step && STEP[step] !== undefined) {
-              const lyrics = {};
-              el.querySelectorAll("lyric").forEach((ly) => { const t = ly.querySelector("text")?.textContent; if (t) lyrics[ly.getAttribute("number") || "1"] = t; });
-              notes.push({ midi: (octave + 1) * 12 + STEP[step] + alter, start, dur, lyrics, lyric: lyrics["1"] || null });
+              const midi = (octave + 1) * 12 + STEP[step] + alter;
+              // タイでつながった音は前の音にくっつけて1つの長い音にする
+              const tieStop = [...el.querySelectorAll("tie")].some((t) => t.getAttribute("type") === "stop");
+              const prev = notes[notes.length - 1];
+              if (tieStop && prev && prev.midi === midi && Math.abs(prev.start + prev.dur - start) < 0.01) {
+                prev.dur += dur;
+              } else {
+                const lyrics = {};
+                el.querySelectorAll("lyric").forEach((ly) => { const t = ly.querySelector("text")?.textContent; if (t) lyrics[ly.getAttribute("number") || "1"] = t; });
+                notes.push({ midi, start, dur, lyrics, lyric: lyrics["1"] || null });
+              }
             }
           }
           if (!isChord) { mCursor += dur; if (mCursor > maxEnd) maxEnd = mCursor; }
