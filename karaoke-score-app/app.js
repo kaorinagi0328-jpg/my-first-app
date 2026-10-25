@@ -26,7 +26,7 @@ function notesFromPairs(pairs, offset = 0) {
 }
 function sampleSong() {
   return {
-    title: "かえるの合唱（サンプル）", bpm: 100,
+    title: "かえるの合唱（サンプル）", bpm: 100, beatsPerMeasure: 4,
     parts: [
       { name: "主旋律", notes: notesFromPairs(FROG_MELODY) },
       { name: "輪唱（2小節おくれ）", notes: notesFromPairs(FROG_MELODY, 8) },
@@ -40,6 +40,9 @@ function parseMusicXML(text) {
   if (doc.querySelector("parsererror")) throw new Error("MusicXMLとして読めませんでした");
   const title = doc.querySelector("work-title")?.textContent || "読み込んだ曲";
   let bpm = 100;
+  let beatsPerMeasure = 4;
+  const beatsEl = doc.querySelector("time > beats");
+  if (beatsEl) beatsPerMeasure = parseInt(beatsEl.textContent, 10) || 4;
   const soundTempo = doc.querySelector("sound[tempo]");
   if (soundTempo) bpm = parseFloat(soundTempo.getAttribute("tempo")) || 100;
   const names = {};
@@ -81,7 +84,7 @@ function parseMusicXML(text) {
     if (notes.length) parts.push({ name: names[partEl.getAttribute("id")] || partEl.getAttribute("id"), notes });
   });
   if (!parts.length) throw new Error("音符のあるパートが見つかりませんでした");
-  return { title, bpm, parts };
+  return { title, bpm, beatsPerMeasure, parts };
 }
 
 // ---------- 音程検出（自己相関） ----------
@@ -121,16 +124,38 @@ function selectedPart() { return song.parts[Number($("partSelect").value || 0)];
 function secPerBeat() { return 60 / (song.bpm * (Number($("tempo").value) / 100)); }
 function songLengthSec(notes) { return Math.max(...notes.map((n) => n.start + n.dur)) * secPerBeat(); }
 
+function clickTone(at, accent, dest) {
+  const ctx = ensureCtx();
+  const osc = ctx.createOscillator(); const g = ctx.createGain();
+  osc.type = "sine"; osc.frequency.value = accent ? 1760 : 1180;
+  const vol = accent ? 0.22 : 0.13;
+  g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(vol, at + 0.004);
+  g.gain.exponentialRampToValueAtTime(0.001, at + 0.07);
+  osc.connect(g).connect(dest); osc.start(at); osc.stop(at + 0.09);
+  return osc;
+}
+function countInBeats() { return $("countIn") && $("countIn").checked ? (song.beatsPerMeasure || 4) : 0; }
 function scheduleModel(notes, onEnded) {
-  const ctx = ensureCtx(); const startAt = ctx.currentTime + 0.1; const spb = secPerBeat();
+  const ctx = ensureCtx(); const spb = secPerBeat();
+  const countIn = countInBeats();
+  const startAt = ctx.currentTime + 0.15 + countIn * spb;
   // 全ての音を1つのマスター音量経由にし、停止時はマスターを切断+全オシレータ停止で即時に音を止める
   // (予約済みの音は setTimeout を消すだけでは止まらないため)
   const master = ctx.createGain(); master.gain.value = 1; master.connect(ctx.destination);
   const oscs = notes.map((n) => playTone(n.midi, startAt + n.start * spb, n.dur * spb, master));
-  const timer = setTimeout(() => { try { master.disconnect(); } catch {} onEnded(); }, (songLengthSec(notes) + 0.3) * 1000);
+  // メトロノーム: カウントインから曲の終わりまで全拍クリック (小節頭は高い音でアクセント)
+  if ($("metronome") && $("metronome").checked) {
+    const measure = song.beatsPerMeasure || 4;
+    const totalBeats = Math.ceil(Math.max(...notes.map((n) => n.start + n.dur)));
+    for (let b = -countIn; b < totalBeats; b++) {
+      const accent = ((b % measure) + measure) % measure === 0;
+      oscs.push(clickTone(startAt + b * spb, accent, master));
+    }
+  }
+  const timer = setTimeout(() => { try { master.disconnect(); } catch {} onEnded(); }, ((startAt - ctx.currentTime) + songLengthSec(notes) + 0.3) * 1000);
   let stopped = false;
   return {
-    startAt,
+    startAt, countIn,
     stop: () => {
       if (stopped) return; stopped = true;
       clearTimeout(timer);
@@ -163,7 +188,7 @@ function roundRectPath(ctx, rx, ry, rw, rh, r) {
   ctx.arcTo(rx, ry, rx + rw, ry, rr);
   ctx.closePath();
 }
-function drawRoll(notes, sung, playheadBeat) {
+function drawRoll(notes, sung, playheadBeat, overlayText) {
   const c = $("roll"), ctx = c.getContext("2d");
   const W = c.width, H = c.height; ctx.clearRect(0, 0, W, H);
   if (!notes.length) return;
@@ -224,7 +249,13 @@ function drawRoll(notes, sung, playheadBeat) {
       seg.forEach((p) => { ctx.beginPath(); ctx.arc(x(p.beat), y(p.midiF), 2.2, 0, Math.PI * 2); ctx.fill(); });
     }
   }
-  if (playheadBeat != null) { ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x(playheadBeat), PAD_T); ctx.lineTo(x(playheadBeat), H - PAD_B); ctx.stroke(); }
+  if (playheadBeat != null && playheadBeat >= 0) { ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x(playheadBeat), PAD_T); ctx.lineTo(x(playheadBeat), H - PAD_B); ctx.stroke(); }
+  if (overlayText) {
+    ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.beginPath(); ctx.arc(W / 2, H / 2, 52, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.font = "bold 64px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(overlayText, W / 2, H / 2 + 2);
+    ctx.textAlign = "right"; ctx.font = "12px system-ui, sans-serif";
+  }
 }
 
 // ---------- 採点 ----------
@@ -268,14 +299,15 @@ function stopAll() { if (playing) { playing.stop(); playing = null; } $("stopBtn
 $("stopBtn").addEventListener("click", () => { stopAll(); $("status").textContent = "止めました"; });
 $("playModel").addEventListener("click", () => {
   stopAll(); const notes = selectedPart().notes;
-  $("status").textContent = "お手本を再生中…";
   const s = scheduleModel(notes, () => { $("status").textContent = "再生が終わりました"; $("stopBtn").disabled = true; });
   playing = s; $("stopBtn").disabled = false;
-  const spb = secPerBeat(); const t0 = performance.now();
+  $("status").textContent = s.countIn ? "カウントイン… 数字が0になったら始まります" : "お手本を再生中…";
+  const spb = secPerBeat(); const ctx = ensureCtx();
   (function tick() {
     if (playing !== s) return;
-    const beat = ((performance.now() - t0) / 1000 - 0.1) / spb;
-    drawRoll(notes, null, Math.max(0, beat));
+    const beat = (ctx.currentTime - s.startAt) / spb;
+    if (beat >= 0 && $("status").textContent.startsWith("カウントイン")) $("status").textContent = "お手本を再生中…";
+    drawRoll(notes, null, Math.max(0, beat), beat < 0 ? String(Math.ceil(-beat)) : null);
     if (beat <= Math.max(...notes.map((n) => n.start + n.dur))) requestAnimationFrame(tick);
   })();
 });
@@ -288,8 +320,8 @@ $("singBtn").addEventListener("click", async () => {
   const src = ctx.createMediaStreamSource(stream);
   const analyser = ctx.createAnalyser(); analyser.fftSize = 2048; src.connect(analyser);
   const buf = new Float32Array(analyser.fftSize);
-  $("status").textContent = "用意… お手本に合わせて歌ってください";
   const s = scheduleModel(notes, finish);
+  $("status").textContent = s.countIn ? "カウントイン… 大きな数字が0になったら歌い始めてください" : "お手本に合わせて歌ってください";
   playing = s; $("stopBtn").disabled = false;
   const trace = []; const spb = secPerBeat(); let done = false; const recent = [];
   function finish() {
@@ -323,7 +355,9 @@ $("singBtn").addEventListener("click", async () => {
       trace.push({ beat, midiF });
       $("livePitch").textContent = "いまの音: " + NOTE_NAMES[((Math.round(midiF) % 12) + 12) % 12];
     }
-    drawRoll(notes, { trace }, Math.max(0, beat));
+    if (beat < 0) $("livePitch").textContent = "あと " + Math.ceil(-beat) + " 拍でスタート";
+    else if (beat >= 0 && $("status").textContent.startsWith("カウントイン")) $("status").textContent = "歌ってください！";
+    drawRoll(notes, { trace }, Math.max(0, beat), beat < 0 ? String(Math.ceil(-beat)) : null);
     requestAnimationFrame(tick);
   })();
 });
