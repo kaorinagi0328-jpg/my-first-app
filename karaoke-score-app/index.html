@@ -41,6 +41,7 @@
   <section class="card">
     <h2>2. 練習と採点</h2>
     <p>
+      <button id="warmupBtn" type="button" disabled>🎯 音程合わせ練習</button>
       <button id="playModel" type="button" disabled>▶ お手本を聞く</button>
       <button id="singBtn" type="button" disabled>🎤 歌って採点</button>
       <button id="stopBtn" type="button" disabled>■ 止める</button>
@@ -53,6 +54,18 @@
     <canvas id="roll" width="900" height="400"></canvas>
     <div id="lyricStrip" class="lyrics"></div>
     <p class="muted">灰色＝お手本の音（ドレミ付き）／ 黄色い太線＝歌った音の高さ ／ 採点後は緑＝合っている・赤＝ずれている音になります</p>
+  </section>
+
+  <section class="card" id="warmupCard" hidden>
+    <h2>🎯 音程合わせ練習</h2>
+    <p id="wuInfo" class="muted">お手本の音を聞いて、同じ高さで歌ってみよう。全5問。</p>
+    <p id="wuTarget" class="nowinfo"></p>
+    <canvas id="wuGauge" width="900" height="130"></canvas>
+    <p id="wuResult" class="game"></p>
+    <p>
+      <button id="wuStart" type="button">▶ スタート</button>
+      <button id="wuQuit" type="button">やめる</button>
+    </p>
   </section>
 
   <section class="card" id="resultCard" hidden>

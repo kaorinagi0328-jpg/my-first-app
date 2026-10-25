@@ -358,13 +358,130 @@ function updateLevelInfo() {
   $("levelInfo").textContent = "⭐ レベル " + L.level + "（次のレベルまで あと " + (L.need - L.into) + " XP）";
 }
 
+// ---------- 音程合わせ練習（ウォームアップ） ----------
+let wu = null; // {targets, idx, score, stream, timers, oscs, done}
+function drawGauge(cents) {
+  const c = $("wuGauge"), ctx = c.getContext("2d");
+  const W = c.width, H = c.height; ctx.clearRect(0, 0, W, H);
+  const cx = W / 2, px = (v) => cx + (v / 220) * (W / 2 - 30);
+  ctx.fillStyle = "rgba(34,197,94,.30)"; ctx.fillRect(px(-50), 18, px(50) - px(-50), H - 46);
+  ctx.fillStyle = "rgba(250,204,21,.30)"; ctx.fillRect(px(-100), 18, px(-50) - px(-100), H - 46); ctx.fillRect(px(50), 18, px(100) - px(50), H - 46);
+  ctx.strokeStyle = "#94a3b8"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(px(-200), H / 2 - 8); ctx.lineTo(px(200), H / 2 - 8); ctx.stroke();
+  ctx.fillStyle = "#e5e7eb"; ctx.font = "16px system-ui, sans-serif"; ctx.textAlign = "center";
+  ctx.fillText("ひくい", px(-160), H - 8); ctx.fillText("お手本", cx, H - 8); ctx.fillText("たかい", px(160), H - 8);
+  ctx.strokeStyle = "#fff"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cx, 12); ctx.lineTo(cx, H - 34); ctx.stroke();
+  if (cents != null && isFinite(cents)) {
+    const v = Math.max(-210, Math.min(210, cents));
+    ctx.fillStyle = Math.abs(cents) <= 50 ? "#22c55e" : Math.abs(cents) <= 100 ? "#facc15" : "#ef4444";
+    ctx.beginPath(); ctx.moveTo(px(v), 26); ctx.lineTo(px(v) - 13, 6); ctx.lineTo(px(v) + 13, 6); ctx.closePath(); ctx.fill();
+    ctx.fillRect(px(v) - 3, 24, 6, H - 62);
+  }
+}
+function wuCleanup() {
+  if (!wu) return;
+  wu.timers.forEach((t) => clearTimeout(t));
+  wu.oscs.forEach((o) => { try { o.stop(); } catch {} });
+  if (wu.stream) wu.stream.getTracks().forEach((t) => t.stop());
+  wu = null;
+}
+function cancelWarmup() { if (wu) { wuCleanup(); $("wuInfo").textContent = "やめました。また挑戦してね"; $("wuTarget").textContent = ""; $("wuResult").textContent = ""; drawGauge(null); } }
+function wuTargets() {
+  const notes = selectedPart() ? selectedPart().notes : [];
+  const uniq = [...new Set(notes.map((n) => n.midi))].sort((a, b) => a - b);
+  if (uniq.length <= 5) return uniq.slice();
+  const picks = [0, 0.25, 0.5, 0.75, 1].map((f) => uniq[Math.round(f * (uniq.length - 1))]);
+  // 少しだけシャッフルして単調にならないようにする
+  for (let i = picks.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [picks[i], picks[j]] = [picks[j], picks[i]]; }
+  return picks;
+}
+async function startWarmup() {
+  stopAll(); cancelWarmup();
+  if (!song) { $("warmupCard").hidden = false; $("wuInfo").textContent = "先に楽譜を読み込んでね（サンプル曲でもOK）"; return; }
+  $("warmupCard").hidden = false;
+  $("warmupCard").scrollIntoView({ behavior: "smooth", block: "center" });
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch { $("wuInfo").textContent = "マイクが使えませんでした。ブラウザのマイク許可を確認してください"; return; }
+  const ctx = ensureCtx();
+  const src = ctx.createMediaStreamSource(stream);
+  const analyser = ctx.createAnalyser(); analyser.fftSize = 2048; src.connect(analyser);
+  const buf = new Float32Array(analyser.fftSize);
+  wu = { targets: wuTargets(), idx: 0, score: 0, ok: 0, stream, timers: [], oscs: [], analyser, buf, ctx };
+  if (!wu.targets.length) { $("wuInfo").textContent = "先に楽譜を読み込んでね"; wuCleanup(); return; }
+  $("wuResult").textContent = "";
+  wuQuestion();
+}
+function wuQuestion() {
+  if (!wu) return;
+  const q = wu; const midi = q.targets[q.idx];
+  $("wuInfo").textContent = (q.idx + 1) + "問目 / " + q.targets.length + "問 ― お手本をよく聞いてね";
+  $("wuTarget").textContent = "♪ " + NOTE_NAMES[((midi % 12) + 12) % 12];
+  $("wuResult").textContent = "";
+  drawGauge(null);
+  const ctx = q.ctx;
+  const master = ctx.createGain(); master.gain.value = 1; master.connect(ctx.destination);
+  q.oscs.push(playTone(midi, ctx.currentTime + 0.15, 1.4, master));
+  // 1.6秒後から2.6秒間聞き取り、後半の安定した部分で判定
+  q.timers.push(setTimeout(() => {
+    if (wu !== q) return;
+    $("wuInfo").textContent = "いま歌って！ その高さをキープしてね";
+    const samples = []; const recent = []; const t0 = ctx.currentTime;
+    (function tick() {
+      if (wu !== q) return;
+      q.analyser.getFloatTimeDomainData(q.buf);
+      const f = detectPitch(q.buf, ctx.sampleRate);
+      const t = ctx.currentTime - t0;
+      if (f && f >= 65 && f <= 1300) {
+        recent.push(freqToMidiFloat(f)); if (recent.length > 5) recent.shift();
+        const sorted = [...recent].sort((a, b) => a - b);
+        const mf = sorted[Math.floor(sorted.length / 2)];
+        samples.push({ t, mf });
+        drawGauge((mf - midi) * 100);
+      }
+      if (t < 2.6) requestAnimationFrame(tick); else wuJudge(q, midi, samples);
+    })();
+  }, 1600));
+}
+function wuJudge(q, midi, samples) {
+  if (wu !== q) return;
+  const stable = samples.filter((s) => s.t >= 1.2).map((s) => s.mf).sort((a, b) => a - b);
+  if (stable.length < 4) {
+    $("wuResult").innerHTML = "声が取れなかった… 大きめの声で もう一度がんばろう（0点）";
+    drawGauge(null);
+  } else {
+    const median = stable[Math.floor(stable.length / 2)];
+    let cents = Math.round((median - midi) * 100);
+    if ($("octaveOk") && $("octaveOk").checked) { while (cents > 600) cents -= 1200; while (cents < -600) cents += 1200; }
+    const a = Math.abs(cents);
+    const points = a <= 50 ? 100 : a <= 100 ? 70 : a <= 150 ? 40 : 0;
+    q.score += points; if (a <= 100) q.ok++;
+    drawGauge(cents);
+    $("wuResult").innerHTML = (a <= 50 ? "◎ ぴったり！" : a <= 100 ? "○ ほぼ合っている！" : a <= 150 ? "△ あと少し！" : "× だいぶずれた…") + "　" + (cents > 0 ? "+" : "") + cents + "セント（" + points + "点）" + (a > 150 ? "" : cents > 30 ? "　少し低くしてみよう" : cents < -30 ? "　少し高くしてみよう" : "");
+  }
+  q.idx++;
+  q.timers.push(setTimeout(() => { if (wu === q) { if (q.idx < q.targets.length) wuQuestion(); else wuFinish(q); } }, 2100));
+}
+function wuFinish(q) {
+  const total = q.score; const xp = Math.round(total / 5);
+  const save = loadSave(); const beforeLv = levelOf(save.xp).level;
+  save.xp += xp; storeSave(save); const L = levelOf(save.xp);
+  $("wuInfo").textContent = "おつかれさま！ ウォームアップ完了";
+  $("wuTarget").textContent = total + "点";
+  $("wuResult").innerHTML = "合っていたのは " + q.ok + " / " + q.targets.length + " 問　+" + xp + " XPゲット！" + (L.level > beforeLv ? "<br>🎉 レベルアップ！ レベル " + L.level + " になったよ！" : "") + "<br>この調子で歌の練習をはじめよう！";
+  updateLevelInfo();
+  wuCleanup();
+}
+$("warmupBtn").addEventListener("click", () => { $("wuInfo").textContent = "「スタート」を押してね。お手本の音が出て、そのあと歌う時間になるよ"; $("warmupCard").hidden = false; $("warmupCard").scrollIntoView({ behavior: "smooth", block: "center" }); drawGauge(null); });
+$("wuStart").addEventListener("click", startWarmup);
+$("wuQuit").addEventListener("click", cancelWarmup);
+
 // ---------- 画面の動作 ----------
 function setSong(s) {
   song = s;
   $("songTitle").textContent = "曲: " + s.title + "（" + s.parts.length + "パート）";
   const sel = $("partSelect"); sel.innerHTML = "";
   s.parts.forEach((p, i) => { const o = document.createElement("option"); o.value = i; o.textContent = p.name + "（" + p.notes.length + "音）"; sel.appendChild(o); });
-  sel.disabled = false; $("playModel").disabled = false; $("singBtn").disabled = false; $("restartBtn").disabled = false;
+  sel.disabled = false; $("playModel").disabled = false; $("singBtn").disabled = false; $("restartBtn").disabled = false; $("warmupBtn").disabled = false;
   $("status").textContent = "パートを選んで「お手本を聞く」か「歌って採点」を押してください";
   $("resultCard").hidden = true;
   refreshStartMeasures(); buildLyrics(selectedPart().notes); updateLevelInfo();
@@ -379,7 +496,7 @@ $("fileInput").addEventListener("change", async (e) => {
   try { setSong(parseMusicXML(await f.text())); }
   catch (err) { $("status").textContent = "読み込み失敗: " + err.message + "（.mxl 圧縮形式は未対応です。.musicxml で書き出してください）"; }
 });
-function stopAll() { if (playing) { playing.stop(); playing = null; } $("stopBtn").disabled = true; }
+function stopAll() { if (playing) { playing.stop(); playing = null; } $("stopBtn").disabled = true; if (typeof cancelWarmup === "function") cancelWarmup(); }
 $("stopBtn").addEventListener("click", () => { stopAll(); $("status").textContent = "止めました"; });
 function startModel() {
   stopAll(); mode = "model"; const notes = segmentNotes(); buildLyrics(notes);
