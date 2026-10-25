@@ -387,7 +387,11 @@ function wuCleanup() {
 function cancelWarmup() { if (wu) { wuCleanup(); $("wuInfo").textContent = "やめました。また挑戦してね"; $("wuTarget").textContent = ""; $("wuResult").textContent = ""; drawGauge(null); } }
 function wuTargets() {
   const notes = selectedPart() ? selectedPart().notes : [];
-  const uniq = [...new Set(notes.map((n) => n.midi))].sort((a, b) => a - b);
+  // 読み取りミスの外れ値（1回だけ出てくる極端な音）は出題から外す
+  const freq = {};
+  notes.forEach((n) => { freq[n.midi] = (freq[n.midi] || 0) + 1; });
+  let uniq = [...new Set(notes.map((n) => n.midi))].filter((m) => freq[m] >= 2).sort((a, b) => a - b);
+  if (uniq.length < 5) uniq = [...new Set(notes.map((n) => n.midi))].sort((a, b) => a - b);
   if (uniq.length <= 5) return uniq.slice();
   const picks = [0, 0.25, 0.5, 0.75, 1].map((f) => uniq[Math.round(f * (uniq.length - 1))]);
   // 少しだけシャッフルして単調にならないようにする
