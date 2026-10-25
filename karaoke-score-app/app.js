@@ -78,9 +78,18 @@ function parseMusicXML(text) {
             if (step && STEP[step] !== undefined) {
               const midi = (octave + 1) * 12 + STEP[step] + alter;
               // タイでつながった音は前の音にくっつけて1つの長い音にする
+              // （多声部の曲では直前が別声部の音のことがあるので、同じ高さで
+              // 　終わりが一致する直近の音を探してつなぐ）
               const tieStop = [...el.querySelectorAll("tie")].some((t) => t.getAttribute("type") === "stop");
-              const prev = notes[notes.length - 1];
-              if (tieStop && prev && prev.midi === midi && Math.abs(prev.start + prev.dur - start) < 0.01) {
+              let prev = null;
+              if (tieStop) {
+                for (let i = notes.length - 1; i >= 0; i--) {
+                  const cand = notes[i];
+                  if (cand.midi === midi && Math.abs(cand.start + cand.dur - start) < 0.06) { prev = cand; break; }
+                  if (cand.start + cand.dur < start - 0.06) break;
+                }
+              }
+              if (prev) {
                 prev.dur += dur;
               } else {
                 const lyrics = {};
