@@ -91,10 +91,15 @@ function parseMusicXML(text) {
               }
               if (prev) {
                 prev.dur += dur;
+                // タイの続きの音に別の音節がある場合（例: か→し）は、その音節も位置つきで残す
+                // （歌詞表示で消えてしまわないように。音自体はタイとして1つにまとめる）
+                const lyrics = {};
+                el.querySelectorAll("lyric").forEach((ly) => { const t = ly.querySelector("text")?.textContent; if (t) lyrics[ly.getAttribute("number") || "1"] = t; });
+                if (Object.keys(lyrics).length) { (prev.lyricSubs = prev.lyricSubs || []).push({ off: start - prev.start, lyrics }); }
               } else {
                 const lyrics = {};
                 el.querySelectorAll("lyric").forEach((ly) => { const t = ly.querySelector("text")?.textContent; if (t) lyrics[ly.getAttribute("number") || "1"] = t; });
-                notes.push({ midi, start, dur, lyrics, lyric: lyrics["1"] || null });
+                notes.push({ midi, start, dur, lyrics, lyric: lyrics["1"] || null, lyricSubs: [] });
               }
             }
           }
@@ -174,13 +179,28 @@ function scheduleModel(notes, onEnded) {
       oscs.push(clickTone(startAt + b * spb, accent, master));
     }
   }
-  const timer = setTimeout(() => { try { master.disconnect(); } catch {} onEnded(); }, ((startAt - ctx.currentTime) + songLengthSec(notes) + 0.3) * 1000);
+  const totalSec = songLengthSec(notes);
+  let endTimer = null; let pausedFlag = false;
+  const armEnd = (delaySec) => { endTimer = setTimeout(() => { try { master.disconnect(); } catch {} onEnded(); }, Math.max(0, delaySec) * 1000); };
+  armEnd((startAt - ctx.currentTime) + totalSec + 0.3);
   let stopped = false;
   return {
     startAt, countIn,
+    get paused() { return pausedFlag; },
+    pause: () => {
+      if (stopped || pausedFlag) return; pausedFlag = true;
+      if (endTimer) clearTimeout(endTimer);
+      ctx.suspend();
+    },
+    resume: () => {
+      if (stopped || !pausedFlag) return; pausedFlag = false;
+      ctx.resume();
+      armEnd((startAt + totalSec) - ctx.currentTime + 0.3);
+    },
     stop: () => {
       if (stopped) return; stopped = true;
-      clearTimeout(timer);
+      if (pausedFlag) { pausedFlag = false; ctx.resume(); }
+      clearTimeout(endTimer);
       try { master.gain.cancelScheduledValues(ctx.currentTime); master.gain.setValueAtTime(0, ctx.currentTime); } catch {}
       oscs.forEach((o) => { try { o.stop(); } catch {} });
       try { master.disconnect(); } catch {}
@@ -318,7 +338,6 @@ function scorePerformance(notes, rawTrace) {
 }
 
 // ---------- 練習サポート（途中から・歌詞・現在位置） ----------
-let lastCurIdx = -2;
 function segmentNotes() {
   const all = selectedPart().notes;
   const sb = (Number($("startMeasure").value || 1) - 1) * (song.beatsPerMeasure || 4);
@@ -334,27 +353,40 @@ function pageView(beat, notes) {
   return { start, span };
 }
 let lyricNotes = [];
+let lastCurKey = "";
 function buildLyrics(notes) {
-  lyricNotes = notes; lastCurIdx = -2;
+  lyricNotes = notes; lastCurKey = "";
   const v = $("verseSelect") ? $("verseSelect").value : "1";
   notes.forEach((n) => { if (n.lyrics) n.lyric = n.lyrics[v] || null; });
   const strip = $("lyricStrip");
-  const withL = notes.map((n, i) => ({ n, i })).filter(({ n }) => n.lyric);
-  if (!withL.length) { strip.innerHTML = '<span style="font-size:15px">(この楽譜には歌詞が入っていません)</span>'; $("nowInfo").textContent = ""; return; }
-  strip.innerHTML = withL.map(({ n, i }) => `<span data-i="${i}">${n.lyric}</span>`).join("");
+  const items = [];
+  notes.forEach((n, i) => {
+    if (n.lyric) items.push({ i, sub: -1, text: n.lyric });
+    (n.lyricSubs || []).forEach((s, k) => { const t = s.lyrics && s.lyrics[v]; if (t) items.push({ i, sub: k, text: t }); });
+  });
+  if (!items.length) { strip.innerHTML = '<span style="font-size:15px">(この楽譜には歌詞が入っていません)</span>'; $("nowInfo").textContent = ""; return; }
+  strip.innerHTML = items.map(({ i, sub, text }) => `<span data-i="${i}" data-sub="${sub}">${text}</span>`).join("");
 }
 function updateCurrent(notes, beat) {
+  const v = $("verseSelect") ? $("verseSelect").value : "1";
   const idx = beat >= 0 ? notes.findIndex((n) => beat >= n.start && beat < n.start + n.dur) : -1;
-  if (idx === lastCurIdx) return; lastCurIdx = idx;
+  let subPos = -1, curText = null;
+  if (idx >= 0) {
+    const n = notes[idx];
+    (n.lyricSubs || []).forEach((s, k) => { if (s.lyrics && s.lyrics[v] && beat - n.start >= s.off - 1e-9) { subPos = k; curText = s.lyrics[v]; } });
+    if (subPos < 0) curText = n.lyric;
+  }
+  const key = idx + ":" + subPos;
+  if (key === lastCurKey) return; lastCurKey = key;
   document.querySelectorAll("#lyricStrip span[data-i]").forEach((s) => {
-    const i = Number(s.dataset.i);
-    s.classList.toggle("on", i === idx);
-    s.classList.toggle("done", idx >= 0 && i < idx);
+    const i = Number(s.dataset.i); const sk = Number(s.dataset.sub || -1);
+    s.classList.toggle("on", i === idx && sk === subPos);
+    s.classList.toggle("done", idx >= 0 && (i < idx || (i === idx && sk < subPos)));
   });
   const on = document.querySelector("#lyricStrip span.on");
   if (on) on.scrollIntoView({ inline: "center", block: "nearest" });
   const n = idx >= 0 ? notes[idx] : null;
-  $("nowInfo").textContent = n ? "♪ " + NOTE_NAMES[((n.midi % 12) + 12) % 12] + (n.lyric ? " ・ " + n.lyric : "") : "";
+  $("nowInfo").textContent = n ? "♪ " + NOTE_NAMES[((n.midi % 12) + 12) % 12] + (curText ? " ・ " + curText : "") : "";
 }
 function refreshStartMeasures() {
   if (!song) return;
@@ -552,7 +584,13 @@ $("driveLoad").addEventListener("click", async () => {
 });
 const songParam = new URLSearchParams(location.search).get("song");
 if (songParam) loadFromDrive(songParam).catch(() => {});
-function stopAll() { if (playing) { playing.stop(); playing = null; } $("stopBtn").disabled = true; if (typeof cancelWarmup === "function") cancelWarmup(); stopReviewLoop(); const ra = $("reviewAudio"); if (ra) ra.pause(); }
+function resetPauseBtn() { const b = $("pauseBtn"); if (b) { b.disabled = true; b.textContent = "⏸ 一時停止"; } }
+function stopAll() { if (playing) { playing.stop(); playing = null; } $("stopBtn").disabled = true; resetPauseBtn(); if (typeof cancelWarmup === "function") cancelWarmup(); stopReviewLoop(); const ra = $("reviewAudio"); if (ra) ra.pause(); }
+$("pauseBtn").addEventListener("click", () => {
+  if (!playing || typeof playing.pause !== "function") return;
+  if (playing.paused) { playing.resume(); if (playing.onResume) playing.onResume(); $("pauseBtn").textContent = "⏸ 一時停止"; $("status").textContent = "再開しました"; }
+  else { playing.pause(); if (playing.onPause) playing.onPause(); $("pauseBtn").textContent = "▶ 再開"; $("status").textContent = "一時停止中（再開ボタンで続きから）"; }
+});
 
 // ---------- 歌声の聞き直し（録音は端末内のみ・送信しない） ----------
 let lastReview = null; // {url, notes, scored, trace, spb, offset}
@@ -579,8 +617,8 @@ $("reviewStop").addEventListener("click", () => { const a = $("reviewAudio"); if
 $("stopBtn").addEventListener("click", () => { stopAll(); $("status").textContent = "止めました"; });
 function startModel() {
   stopAll(); mode = "model"; const notes = segmentNotes(); buildLyrics(notes);
-  const s = scheduleModel(notes, () => { $("status").textContent = "再生が終わりました"; $("stopBtn").disabled = true; });
-  playing = s; $("stopBtn").disabled = false;
+  const s = scheduleModel(notes, () => { $("status").textContent = "再生が終わりました"; $("stopBtn").disabled = true; resetPauseBtn(); });
+  playing = s; $("stopBtn").disabled = false; { const pb = $("pauseBtn"); pb.disabled = false; pb.textContent = "⏸ 一時停止"; }
   $("status").textContent = s.countIn ? "カウントイン… 数字が0になったら始まります" : "お手本を再生中…";
   const spb = secPerBeat(); const ctx = ensureCtx();
   (function tick() {
@@ -604,7 +642,7 @@ async function startSing() {
   const buf = new Float32Array(analyser.fftSize);
   const s = scheduleModel(notes, finish);
   $("status").textContent = s.countIn ? "カウントイン… 大きな数字が0になったら歌い始めてください" : "お手本に合わせて歌ってください";
-  playing = s; $("stopBtn").disabled = false;
+  playing = s; $("stopBtn").disabled = false; { const pb = $("pauseBtn"); pb.disabled = false; pb.textContent = "⏸ 一時停止"; }
   const trace = []; const spb = secPerBeat(); let done = false; const recent = [];
   // 聞き直し用に歌声を録音する（端末内のみ。外部送信はしない）
   let recorder = null; const recChunks = []; const recT0 = ctx.currentTime; let recDiscard = false;
@@ -617,6 +655,8 @@ async function startSing() {
       recorder.start(250);
     } catch { recorder = null; }
   }
+  s.onPause = () => { try { if (recorder && recorder.state === "recording") recorder.pause(); } catch {} };
+  s.onResume = () => { try { if (recorder && recorder.state === "paused") recorder.resume(); } catch {} };
   function finalizeRecording(keep, scored) {
     if (!recorder) return;
     const rec = recorder; recorder = null;
@@ -633,7 +673,7 @@ async function startSing() {
   }
   function finish() {
     if (done) return; done = true;
-    stream.getTracks().forEach((t) => t.stop()); $("stopBtn").disabled = true;
+    stream.getTracks().forEach((t) => t.stop()); $("stopBtn").disabled = true; resetPauseBtn();
     const result = scorePerformance(notes, trace);
     finalizeRecording(true, result.scored);
     drawRoll(notes, { trace, scored: result.scored }, null);
@@ -680,6 +720,7 @@ async function startSing() {
   };
   (function tick() {
     if (done || playing !== s) return;
+    if (ctx.state === "suspended") { requestAnimationFrame(tick); return; } // 一時停止中は採点データを集めない
     analyser.getFloatTimeDomainData(buf);
     const f = detectPitch(buf, ctx.sampleRate);
     const beat = (ctx.currentTime - s.startAt) / spb;
@@ -699,6 +740,14 @@ async function startSing() {
   })();
 }
 $("singBtn").addEventListener("click", startSing);
+// 音程バーの高さを画面の高さに合わせて調整（バーと歌詞が1画面に収まるように）
+function fitRoll() {
+  const c = $("roll"); if (!c) return;
+  const h = Math.round(Math.min(230, Math.max(140, window.innerHeight * 0.30)));
+  if (c.height !== h) { c.height = h; if (song) drawRoll(selectedPart().notes, null, null); }
+}
+window.addEventListener("resize", fitRoll);
+fitRoll();
 // 練習用: 再生中でも録音中でも、カウントインから最初に戻ってやり直す
 $("restartBtn").addEventListener("click", () => {
   if (!song) return;

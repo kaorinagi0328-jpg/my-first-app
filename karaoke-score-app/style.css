@@ -35,3 +35,18 @@ canvas{width:100%;height:auto;background:#0d1330;border:1px solid #2c3768;border
 textarea{width:100%;font-size:12px;padding:6px;box-sizing:border-box;background:#0f1533;color:#e8ecf8;border:1px solid #39447c;border-radius:8px}
 details{margin-top:8px}
 summary{cursor:pointer;color:#38bdf8}
+/* 背の低い画面（Chromebook等）では詰めて、音程バーと歌詞を1画面に収める */
+@media (max-height:860px){
+  header{padding:6px 12px 0}
+  header h1{font-size:26px}
+  header p{display:none}
+  main{gap:10px;padding-top:4px}
+  .card{padding:10px 12px}
+  .card h2{font-size:17px;margin:0 0 4px;padding-bottom:3px}
+  .nowinfo{font-size:24px;min-height:32px}
+  .live{font-size:16px;min-height:24px}
+  .lyrics{font-size:18px;line-height:1.6;padding:4px 2px}
+  button{padding:8px 14px;font-size:14px}
+  button#singBtn{font-size:16px;padding:10px 20px}
+  label{margin:6px 0}
+}
