@@ -1,6 +1,6 @@
 body{font-family:system-ui,-apple-system,"Hiragino Sans",sans-serif;margin:0;background:linear-gradient(180deg,#0b1026 0%,#141b3f 55%,#1b1040 100%);background-attachment:fixed;color:#e8ecf8;min-height:100vh}
-header{padding:26px 16px 6px;max-width:960px;margin:auto;text-align:center}
-header h1{font-size:44px;margin:0;letter-spacing:.04em;font-weight:900;background:linear-gradient(90deg,#22d3ee,#818cf8,#e879f9,#fbbf24);-webkit-background-clip:text;background-clip:text;color:transparent}
+header{padding:14px 16px 2px;max-width:960px;margin:auto;text-align:center}
+header h1{font-size:34px;margin:0;letter-spacing:.04em;font-weight:900;background:linear-gradient(90deg,#22d3ee,#818cf8,#e879f9,#fbbf24);-webkit-background-clip:text;background-clip:text;color:transparent}
 header p{color:#a5b0d6;margin:8px 0 0}
 main{max-width:960px;margin:auto;padding:8px 16px 40px;display:grid;gap:16px}
 .card{background:rgba(23,29,62,.88);border:1px solid #39447c;border-radius:16px;padding:16px 18px;box-shadow:0 4px 18px rgba(0,0,0,.45)}
@@ -15,12 +15,12 @@ button#restartBtn{background:linear-gradient(90deg,#059669,#14b8a6)}
 label{display:block;margin:10px 0}
 select{font-size:16px;padding:6px;background:#0f1533;color:#e8ecf8;border:1px solid #39447c;border-radius:8px}
 input[type=range]{accent-color:#22d3ee}
-.muted{color:#9aa7c7}.live{font-size:22px;font-weight:700;min-height:30px;color:#fde047}
+.muted{color:#9aa7c7}.live{font-size:19px;font-weight:700;min-height:30px;color:#fde047}
 canvas{width:100%;height:auto;background:#0d1330;border:1px solid #2c3768;border-radius:12px}
 .score{font-size:28px}.score span{font-size:56px;font-weight:900;color:#facc15;text-shadow:0 0 18px rgba(250,204,21,.45)}
 #noteResults{line-height:1.8}
-.nowinfo{font-size:40px;font-weight:800;min-height:52px;margin:2px 0;color:#fbbf24}
-.lyrics{font-size:26px;line-height:1.9;padding:8px 4px;overflow-x:auto;white-space:nowrap}
+.nowinfo{font-size:30px;font-weight:800;min-height:40px;margin:2px 0;color:#fbbf24}
+.lyrics{font-size:22px;line-height:1.9;padding:8px 4px;overflow-x:auto;white-space:nowrap}
 .lyrics span{display:inline-block;padding:2px 3px;border-radius:6px;color:#8b94b8;transition:all .1s}
 .lyrics span.on{background:#fde047;color:#111;font-weight:800;transform:scale(1.22)}
 .controls{position:sticky;top:0;z-index:20;background:rgba(23,29,62,.96);padding:8px 0 4px;margin:0 -4px}
