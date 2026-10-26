@@ -247,7 +247,7 @@ function drawRoll(notes, sung, playheadBeat, overlayText, view) {
       ctx.textAlign = "right"; ctx.font = "12px system-ui, sans-serif";
     }
   };
-  notes.forEach((n) => drawNote(n, "#64748b"));
+  notes.forEach((n) => drawNote(n, "#5b7fff"));
   if (sung && sung.scored) {
     sung.scored.forEach((s, i) => drawNote(notes[i], s.ok ? "rgba(34,197,94,.88)" : "rgba(239,68,68,.88)"));
   }
@@ -510,7 +510,7 @@ function setSong(s) {
   const sel = $("partSelect"); sel.innerHTML = "";
   s.parts.forEach((p, i) => { const o = document.createElement("option"); o.value = i; o.textContent = p.name + "（" + p.notes.length + "音）"; sel.appendChild(o); });
   sel.disabled = false; $("playModel").disabled = false; $("singBtn").disabled = false; $("restartBtn").disabled = false; $("warmupBtn").disabled = false;
-  $("status").textContent = "パートを選んで「お手本を聞く」か「歌って採点」を押してください";
+  $("status").textContent = "パートを選んで「お手本を聞く」か「歌ってバトル！」を押してください";
   $("resultCard").hidden = true;
   refreshStartMeasures(); buildLyrics(selectedPart().notes); updateLevelInfo();
   drawRoll(selectedPart().notes, null, null);
