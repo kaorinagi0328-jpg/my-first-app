@@ -525,11 +525,31 @@ $("fileInput").addEventListener("change", async (e) => {
   catch (err) { $("status").textContent = "読み込み失敗: " + err.message + "（.mxl 圧縮形式は未対応です。.musicxml で書き出してください）"; }
 });
 $("pasteLoad").addEventListener("click", () => {
-  const text = $("pasteArea").value.trim();
+  let text = $("pasteArea").value.trim();
+  const i = text.indexOf("<");
+  if (i > 0) text = text.slice(i); // 先頭に余分な文字（ブラウザの表示注記など）が混ざっても読み込めるように
   if (!text) { $("pasteStatus").textContent = "まず楽譜の中身を貼り付けてください"; return; }
   try { setSong(parseMusicXML(text)); $("pasteStatus").textContent = "読み込みました"; $("pasteArea").value = ""; }
   catch (err) { $("pasteStatus").textContent = "読み込み失敗: " + err.message; }
 });
+async function loadFromDrive(idOrUrl) {
+  const m = String(idOrUrl).match(/[-\w]{25,}/);
+  if (!m) throw new Error("リンクからファイルIDが取れませんでした");
+  const res = await fetch("https://drive.google.com/uc?export=download&id=" + m[0]);
+  if (!res.ok) throw new Error("ドライブから取得できませんでした (HTTP " + res.status + ")");
+  const text = await res.text();
+  if (!text.includes("<score-partwise")) throw new Error("楽譜データが返ってきませんでした。共有設定が「リンクを知っている全員が閲覧可」になっているか確認してください");
+  setSong(parseMusicXML(text));
+}
+$("driveLoad").addEventListener("click", async () => {
+  const v = $("driveUrl").value.trim();
+  if (!v) { $("driveStatus").textContent = "まず共有リンクを貼ってください"; return; }
+  $("driveStatus").textContent = "読み込み中…";
+  try { await loadFromDrive(v); $("driveStatus").textContent = "読み込みました"; }
+  catch (err) { $("driveStatus").textContent = "読み込み失敗: " + err.message; }
+});
+const songParam = new URLSearchParams(location.search).get("song");
+if (songParam) loadFromDrive(songParam).catch(() => {});
 function stopAll() { if (playing) { playing.stop(); playing = null; } $("stopBtn").disabled = true; if (typeof cancelWarmup === "function") cancelWarmup(); }
 $("stopBtn").addEventListener("click", () => { stopAll(); $("status").textContent = "止めました"; });
 function startModel() {

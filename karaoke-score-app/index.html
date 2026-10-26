@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ピッチクエスト｜歌って音程バトル</title>
+<title>カラオケ★マスター｜歌って音程バトル</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header>
-  <h1>🎤 ピッチクエスト</h1>
-  <p>歌って、音程を攻略せよ！ お手本にピタッと合わせて XP をためてレベルアップ。声はこの端末の中だけで処理されます。</p>
+  <h1>🎤 カラオケ★マスター</h1>
+  <p>歌って、音程を攻略せよ！ お手本にピタッと合わせて XP をためて、カラオケマスターをめざそう。声はこの端末の中だけで処理されます。</p>
 </header>
 <main>
   <section class="card">
@@ -21,6 +21,11 @@
       </label>
     </p>
     <p class="muted">スマホでは、楽譜ファイルを先に「ファイル」アプリに保存してから選んでください（チャットの添付ファイルを開いて共有ボタン→「ファイルに保存」）。</p>
+    <p class="muted">Googleドライブの共有リンクでも読み込めます（ファイルが選べない学校のパソコン向け）:
+      <input id="driveUrl" type="text" size="34" placeholder="ドライブの共有リンクを貼る">
+      <button id="driveLoad" type="button">リンクで読み込む</button>
+      <span id="driveStatus" class="muted"></span>
+    </p>
     <details>
       <summary>ファイルが選べないとき（学校のパソコンなど）</summary>
       <p class="muted">学校のパソコンでは、セキュリティでファイル選択が止められることがあります。そのときは: ①楽譜ファイル（.xml）をメモ帳などで開く ② Ctrl+A → Ctrl+C で全部コピー ③ 下の欄に Ctrl+V で貼り付けて「読み込む」を押す。貼り付けた内容はこの端末の中だけで使われ、どこにも送信されません。</p>
