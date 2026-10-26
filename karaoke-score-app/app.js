@@ -524,6 +524,12 @@ $("fileInput").addEventListener("change", async (e) => {
   try { setSong(parseMusicXML(await f.text())); }
   catch (err) { $("status").textContent = "読み込み失敗: " + err.message + "（.mxl 圧縮形式は未対応です。.musicxml で書き出してください）"; }
 });
+$("pasteLoad").addEventListener("click", () => {
+  const text = $("pasteArea").value.trim();
+  if (!text) { $("pasteStatus").textContent = "まず楽譜の中身を貼り付けてください"; return; }
+  try { setSong(parseMusicXML(text)); $("pasteStatus").textContent = "読み込みました"; $("pasteArea").value = ""; }
+  catch (err) { $("pasteStatus").textContent = "読み込み失敗: " + err.message; }
+});
 function stopAll() { if (playing) { playing.stop(); playing = null; } $("stopBtn").disabled = true; if (typeof cancelWarmup === "function") cancelWarmup(); }
 $("stopBtn").addEventListener("click", () => { stopAll(); $("status").textContent = "止めました"; });
 function startModel() {
