@@ -21,8 +21,10 @@ canvas{width:100%;height:auto;background:#0d1330;border:1px solid #2c3768;border
 #noteResults{line-height:1.8}
 .nowinfo{font-size:40px;font-weight:800;min-height:52px;margin:2px 0;color:#fbbf24}
 .lyrics{font-size:26px;line-height:1.9;padding:8px 4px;overflow-x:auto;white-space:nowrap}
-.lyrics span{padding:2px 3px;border-radius:6px;color:#8b94b8;transition:all .1s}
-.lyrics span.on{background:#fde047;color:#111;font-weight:800;font-size:32px}
+.lyrics span{display:inline-block;padding:2px 3px;border-radius:6px;color:#8b94b8;transition:all .1s}
+.lyrics span.on{background:#fde047;color:#111;font-weight:800;transform:scale(1.22)}
+.controls{position:sticky;top:0;z-index:20;background:rgba(23,29,62,.96);padding:8px 0 4px;margin:0 -4px}
+.controls p{margin:4px 0}
 .lyrics span.done{color:#38bdf8}
 .game{font-size:22px;font-weight:700;line-height:1.7}
 .bar{background:#0f1533;border:1px solid #2c3768;border-radius:999px;height:16px;overflow:hidden;margin:8px 0}
