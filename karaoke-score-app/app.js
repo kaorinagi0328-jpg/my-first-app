@@ -124,6 +124,13 @@ function parseMusicXML(text) {
     if (notes.length) parts.push({ name: names[partEl.getAttribute("id")] || partEl.getAttribute("id"), notes, measureStarts });
   });
   if (!parts.length) throw new Error("音符のあるパートが見つかりませんでした");
+  // テンポ変更（例: コーダだけゆっくり）を拾う。最初のパートの各小節にある sound[tempo] を見る
+  const tempoChanges = [];
+  const firstPartEl = doc.querySelector("part");
+  if (firstPartEl) firstPartEl.querySelectorAll("measure").forEach((measure, mIdx) => {
+    const stEl = measure.querySelector("sound[tempo]");
+    if (stEl) { const v = parseFloat(stEl.getAttribute("tempo")); if (v) tempoChanges.push({ measure: mIdx + 1, bpm: v }); }
+  });
   // 演奏順に展開した音符列も用意する（元の並びは rawNotes として残す）
   if (order) {
     const pickVerse = (lyrics, v) => {
@@ -156,7 +163,21 @@ function parseMusicXML(text) {
     let perf = 1;
     segRanges = order.map((seg) => { const len = seg.to - seg.from + 1; const r = { ...seg, fromPerf: perf, toPerf: perf + len - 1 }; perf += len; return r; });
   }
-  return { title, bpm, beatsPerMeasure, parts, order, segRanges };
+  // テンポ変更点を使いやすい形に（1小節目のテンポは全体のテンポとして扱うので除く）
+  const midChanges = tempoChanges.filter((c) => c.measure > 1);
+  const tempoPointsRaw = midChanges.length ? midChanges.map((c) => ({ beat: parts[0].measureStarts[c.measure] || 0, bpm: c.bpm })) : null;
+  let tempoPointsOrdered = null;
+  if (order && segRanges && midChanges.length) {
+    tempoPointsOrdered = [];
+    midChanges.forEach((c) => {
+      segRanges.forEach((seg) => {
+        if (c.measure >= seg.from && c.measure <= seg.to) tempoPointsOrdered.push({ beat: (seg.fromPerf + (c.measure - seg.from) - 1) * beatsPerMeasure, bpm: c.bpm });
+      });
+    });
+    tempoPointsOrdered.sort((a, b) => a.beat - b.beat);
+    if (!tempoPointsOrdered.length) tempoPointsOrdered = null;
+  }
+  return { title, bpm, beatsPerMeasure, parts, order, segRanges, tempoPointsRaw, tempoPointsOrdered, tempoPoints: (order && tempoPointsOrdered) ? tempoPointsOrdered : tempoPointsRaw };
 }
 
 // ---------- 音程検出（自己相関） ----------
@@ -194,7 +215,30 @@ function playTone(midi, at, dur, dest, gainVal = 0.18) {
 }
 function selectedPart() { return song.parts[Number($("partSelect").value || 0)]; }
 function secPerBeat() { return 60 / (song.bpm * (Number($("tempo").value) / 100)); }
-function songLengthSec(notes) { return Math.max(...notes.map((n) => n.start + n.dur)) * secPerBeat(); }
+// テンポ変更に対応した「拍⇔秒」の変換。segs = [{beat, sec, spb}]（区間ごとの1拍の秒数）
+function convFromSegs(segs) {
+  const toSec = (b) => { let s = segs[0]; for (const g of segs) { if (b >= g.beat) s = g; else break; } return s.sec + (b - s.beat) * s.spb; };
+  const toBeat = (sec) => { let s = segs[0]; for (const g of segs) { if (sec >= g.sec) s = g; else break; } return s.beat + (sec - s.sec) / s.spb; };
+  return { segs, toSec, toBeat };
+}
+function makeTempoConv(points) {
+  const pct = Number($("tempo").value || 100) / 100;
+  let initBpm = song.bpm;
+  const ch = [];
+  (points || []).forEach((p) => { if (p.beat <= 0.001) initBpm = p.bpm; else ch.push(p); });
+  ch.sort((a, b) => a.beat - b.beat);
+  const segs = [{ beat: 0, sec: 0, spb: 60 / (initBpm * pct) }];
+  ch.forEach((p) => { const prev = segs[segs.length - 1]; segs.push({ beat: p.beat, sec: prev.sec + (p.beat - prev.beat) * prev.spb, spb: 60 / (p.bpm * pct) }); });
+  return convFromSegs(segs);
+}
+// 再生範囲に合わせたテンポ変更点（範囲の開始拍を0にずらす）
+function sessionTempoPoints() {
+  if (!song || !song.tempoPoints) return null;
+  const bpp = song.beatsPerMeasure || 4;
+  const sb = (Number($("startMeasure").value || 1) - 1) * bpp;
+  const eb = practiceEnd ? practiceEnd * bpp : Infinity;
+  return song.tempoPoints.filter((p) => p.beat < eb).map((p) => ({ beat: p.beat - sb, bpm: p.bpm }));
+}
 
 function clickTone(at, accent, dest) {
   const ctx = ensureCtx();
@@ -208,31 +252,32 @@ function clickTone(at, accent, dest) {
 }
 function countInBeats() { return $("countIn") && $("countIn").checked ? (song.beatsPerMeasure || 4) : 0; }
 function scheduleModel(notes, onEnded, endNotes) {
-  const ctx = ensureCtx(); const spb = secPerBeat();
+  const ctx = ensureCtx();
+  const conv = makeTempoConv(sessionTempoPoints());
   const countIn = countInBeats();
-  const startAt = ctx.currentTime + 0.15 + countIn * spb;
+  const startAt = ctx.currentTime + 0.15 + countIn * conv.segs[0].spb;
   // 終了タイミングの基準（ガイド音が短いパートでも、自分のパートの終わりまで続けるため）
   const lenNotes = (endNotes && endNotes.length) ? endNotes : notes;
   // 全ての音を1つのマスター音量経由にし、停止時はマスターを切断+全オシレータ停止で即時に音を止める
   // (予約済みの音は setTimeout を消すだけでは止まらないため)
   const master = ctx.createGain(); master.gain.value = 1; master.connect(ctx.destination);
-  const oscs = notes.map((n) => playTone(n.midi, startAt + n.start * spb, n.dur * spb, master, n.gain != null ? 0.18 * n.gain : 0.18));
+  const oscs = notes.map((n) => { const at = startAt + conv.toSec(n.start); return playTone(n.midi, at, Math.max(0.05, conv.toSec(n.start + n.dur) - at), master, n.gain != null ? 0.18 * n.gain : 0.18); });
   // メトロノーム: カウントインから曲の終わりまで全拍クリック (小節頭は高い音でアクセント)
   if ($("metronome") && $("metronome").checked) {
     const measure = song.beatsPerMeasure || 4;
     const totalBeats = Math.ceil(Math.max(...lenNotes.map((n) => n.start + n.dur)));
     for (let b = -countIn; b < totalBeats; b++) {
       const accent = ((b % measure) + measure) % measure === 0;
-      oscs.push(clickTone(startAt + b * spb, accent, master));
+      oscs.push(clickTone(b < 0 ? startAt + b * conv.segs[0].spb : startAt + conv.toSec(b), accent, master));
     }
   }
-  const totalSec = songLengthSec(lenNotes);
+  const totalSec = conv.toSec(Math.max(...lenNotes.map((n) => n.start + n.dur)));
   let endTimer = null; let pausedFlag = false;
   const armEnd = (delaySec) => { endTimer = setTimeout(() => { try { master.disconnect(); } catch {} onEnded(); }, Math.max(0, delaySec) * 1000); };
   armEnd((startAt - ctx.currentTime) + totalSec + 0.3);
   let stopped = false;
   return {
-    startAt, countIn,
+    startAt, countIn, conv,
     get paused() { return pausedFlag; },
     pause: () => {
       if (stopped || pausedFlag) return; pausedFlag = true;
@@ -689,6 +734,7 @@ $("orderMode").addEventListener("change", () => {
   stopAll();
   const on = $("orderMode").checked;
   song.parts.forEach((p) => { p.notes = on ? p.orderedNotes : p.rawNotes; });
+  song.tempoPoints = on ? (song.tempoPointsOrdered || song.tempoPointsRaw) : song.tempoPointsRaw;
   practiceEnd = null; if ($("rangeSelect")) $("rangeSelect").value = "all";
   const rw = $("rangeWrap"); if (rw) rw.hidden = !on;
   $("startMeasure").value = "1";
@@ -753,20 +799,21 @@ $("pauseBtn").addEventListener("click", () => {
 });
 
 // ---------- 歌声の聞き直し（録音は端末内のみ・送信しない） ----------
-let lastReview = null; // {url, notes, scored, trace, spb, offset}
+let lastReview = null; // {url, notes, scored, trace, segs, offset}
 let reviewAnim = null;
 function stopReviewLoop() { if (reviewAnim) cancelAnimationFrame(reviewAnim); reviewAnim = null; const b = $("reviewStop"); if (b) b.disabled = true; }
 function playReview(fromBeat) {
   if (!lastReview) return;
   const audio = $("reviewAudio"); if (!audio) return;
   stopReviewLoop();
-  if (fromBeat != null) audio.currentTime = Math.max(0, lastReview.offset + fromBeat * lastReview.spb);
+  const conv = convFromSegs(lastReview.segs);
+  if (fromBeat != null) audio.currentTime = Math.max(0, lastReview.offset + conv.toSec(fromBeat));
   audio.play().catch(() => {});
   $("reviewStop").disabled = false;
   const notes = lastReview.notes;
   (function loop() {
     if (audio.paused || audio.ended) { stopReviewLoop(); return; }
-    const beat = (audio.currentTime - lastReview.offset) / lastReview.spb;
+    const beat = conv.toBeat(audio.currentTime - lastReview.offset);
     updateCurrent(notes, beat);
     drawRoll(notes, { trace: lastReview.trace, scored: lastReview.scored }, Math.max(0, beat), null, pageView(beat, notes));
     reviewAnim = requestAnimationFrame(loop);
@@ -780,10 +827,10 @@ function startModel() {
   const s = scheduleModel(guideNotesFor(notes), () => { $("status").textContent = "再生が終わりました"; $("stopBtn").disabled = true; resetPauseBtn(); }, notes);
   playing = s; $("stopBtn").disabled = false; { const pb = $("pauseBtn"); pb.disabled = false; pb.textContent = "⏸ 一時停止"; }
   $("status").textContent = (s.countIn ? "カウントイン… 数字が0になったら始まります" : "お手本を再生中…") + stageNote();
-  const spb = secPerBeat(); const ctx = ensureCtx();
+  const ctx = ensureCtx();
   (function tick() {
     if (playing !== s) return;
-    const beat = (ctx.currentTime - s.startAt) / spb;
+    const beat = s.conv.toBeat(ctx.currentTime - s.startAt);
     if (beat >= 0 && $("status").textContent.startsWith("カウントイン")) $("status").textContent = "お手本を再生中…";
     updateCurrent(notes, beat);
     drawRoll(notes, null, Math.max(0, beat), beat < 0 ? String(Math.ceil(-beat)) : null, pageView(beat, notes));
@@ -803,7 +850,7 @@ async function startSing() {
   const s = scheduleModel(guideNotesFor(notes), finish, notes);
   $("status").textContent = (s.countIn ? "カウントイン… 大きな数字が0になったら歌い始めてください" : "お手本に合わせて歌ってください") + stageNote();
   playing = s; $("stopBtn").disabled = false; { const pb = $("pauseBtn"); pb.disabled = false; pb.textContent = "⏸ 一時停止"; }
-  const trace = []; const spb = secPerBeat(); let done = false; const recent = [];
+  const trace = []; let done = false; const recent = [];
   // 聞き直し用に歌声を録音する（端末内のみ。外部送信はしない）
   let recorder = null; const recChunks = []; const recT0 = ctx.currentTime; let recDiscard = false;
   const recOffset = s.startAt - recT0; // 録音の何秒目が曲の0拍目か
@@ -825,7 +872,7 @@ async function startSing() {
       const blob = new Blob(recChunks, { type: rec.mimeType || "audio/webm" });
       if (lastReview && lastReview.url) URL.revokeObjectURL(lastReview.url);
       const url = URL.createObjectURL(blob);
-      lastReview = { url, notes, scored, trace, spb, offset: recOffset };
+      lastReview = { url, notes, scored, trace, segs: s.conv.segs, offset: recOffset };
       const audio = $("reviewAudio"); if (audio) audio.src = url;
       $("reviewBox").hidden = false;
     };
@@ -914,7 +961,7 @@ async function startSing() {
     if (ctx.state === "suspended") { requestAnimationFrame(tick); return; } // 一時停止中は採点データを集めない
     analyser.getFloatTimeDomainData(buf);
     const f = detectPitch(buf, ctx.sampleRate);
-    const beat = (ctx.currentTime - s.startAt) / spb;
+    const beat = s.conv.toBeat(ctx.currentTime - s.startAt);
     if (f && f >= 65 && f <= 1300 && beat >= 0) {
       // 直近5回の中央値で1回だけの検出ミス(オクターブ跳び等)を消す
       recent.push(freqToMidiFloat(f)); if (recent.length > 5) recent.shift();
