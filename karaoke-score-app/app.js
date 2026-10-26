@@ -512,6 +512,8 @@ function setSong(s) {
   sel.disabled = false; $("playModel").disabled = false; $("singBtn").disabled = false; $("restartBtn").disabled = false; $("warmupBtn").disabled = false;
   $("status").textContent = "パートを選んで「お手本を聞く」か「歌ってバトル！」を押してください";
   $("resultCard").hidden = true;
+  stopReviewLoop(); if (lastReview && lastReview.url) URL.revokeObjectURL(lastReview.url); lastReview = null;
+  const rb = $("reviewBox"); if (rb) rb.hidden = true; const ra = $("reviewAudio"); if (ra) { ra.pause(); ra.removeAttribute("src"); }
   refreshStartMeasures(); buildLyrics(selectedPart().notes); updateLevelInfo();
   drawRoll(selectedPart().notes, null, null);
 }
@@ -550,7 +552,30 @@ $("driveLoad").addEventListener("click", async () => {
 });
 const songParam = new URLSearchParams(location.search).get("song");
 if (songParam) loadFromDrive(songParam).catch(() => {});
-function stopAll() { if (playing) { playing.stop(); playing = null; } $("stopBtn").disabled = true; if (typeof cancelWarmup === "function") cancelWarmup(); }
+function stopAll() { if (playing) { playing.stop(); playing = null; } $("stopBtn").disabled = true; if (typeof cancelWarmup === "function") cancelWarmup(); stopReviewLoop(); const ra = $("reviewAudio"); if (ra) ra.pause(); }
+
+// ---------- 歌声の聞き直し（録音は端末内のみ・送信しない） ----------
+let lastReview = null; // {url, notes, scored, trace, spb, offset}
+let reviewAnim = null;
+function stopReviewLoop() { if (reviewAnim) cancelAnimationFrame(reviewAnim); reviewAnim = null; const b = $("reviewStop"); if (b) b.disabled = true; }
+function playReview(fromBeat) {
+  if (!lastReview) return;
+  const audio = $("reviewAudio"); if (!audio) return;
+  stopReviewLoop();
+  if (fromBeat != null) audio.currentTime = Math.max(0, lastReview.offset + fromBeat * lastReview.spb);
+  audio.play().catch(() => {});
+  $("reviewStop").disabled = false;
+  const notes = lastReview.notes;
+  (function loop() {
+    if (audio.paused || audio.ended) { stopReviewLoop(); return; }
+    const beat = (audio.currentTime - lastReview.offset) / lastReview.spb;
+    updateCurrent(notes, beat);
+    drawRoll(notes, { trace: lastReview.trace, scored: lastReview.scored }, Math.max(0, beat), null, pageView(beat, notes));
+    reviewAnim = requestAnimationFrame(loop);
+  })();
+}
+$("reviewPlay").addEventListener("click", () => playReview(null));
+$("reviewStop").addEventListener("click", () => { const a = $("reviewAudio"); if (a) a.pause(); stopReviewLoop(); });
 $("stopBtn").addEventListener("click", () => { stopAll(); $("status").textContent = "止めました"; });
 function startModel() {
   stopAll(); mode = "model"; const notes = segmentNotes(); buildLyrics(notes);
@@ -581,10 +606,36 @@ async function startSing() {
   $("status").textContent = s.countIn ? "カウントイン… 大きな数字が0になったら歌い始めてください" : "お手本に合わせて歌ってください";
   playing = s; $("stopBtn").disabled = false;
   const trace = []; const spb = secPerBeat(); let done = false; const recent = [];
+  // 聞き直し用に歌声を録音する（端末内のみ。外部送信はしない）
+  let recorder = null; const recChunks = []; const recT0 = ctx.currentTime; let recDiscard = false;
+  const recOffset = s.startAt - recT0; // 録音の何秒目が曲の0拍目か
+  if (window.MediaRecorder) {
+    const mime = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/ogg"].find((m) => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } });
+    try {
+      recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      recorder.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
+      recorder.start(250);
+    } catch { recorder = null; }
+  }
+  function finalizeRecording(keep, scored) {
+    if (!recorder) return;
+    const rec = recorder; recorder = null;
+    rec.onstop = () => {
+      if (!keep || recDiscard || !recChunks.length) return;
+      const blob = new Blob(recChunks, { type: rec.mimeType || "audio/webm" });
+      if (lastReview && lastReview.url) URL.revokeObjectURL(lastReview.url);
+      const url = URL.createObjectURL(blob);
+      lastReview = { url, notes, scored, trace, spb, offset: recOffset };
+      const audio = $("reviewAudio"); if (audio) audio.src = url;
+      $("reviewBox").hidden = false;
+    };
+    try { rec.stop(); } catch {}
+  }
   function finish() {
     if (done) return; done = true;
     stream.getTracks().forEach((t) => t.stop()); $("stopBtn").disabled = true;
     const result = scorePerformance(notes, trace);
+    finalizeRecording(true, result.scored);
     drawRoll(notes, { trace, scored: result.scored }, null);
     $("scoreNum").textContent = result.total;
     const ul = $("noteResults"); ul.innerHTML = "";
@@ -592,6 +643,10 @@ async function startSing() {
       const li = document.createElement("li");
       const n = notes[i];
       li.textContent = (i + 1) + "音目 " + NOTE_NAMES[((n.midi % 12) + 12) % 12] + ": " + r.label + (r.cents == null ? "" : "（" + (r.cents > 0 ? "+" : "") + r.cents + "セント）");
+      if (!r.ok) { // ずれた音はタップでその場所から聞き直せる
+        li.className = "miss"; li.title = "タップすると、その音の場所から聞き直せます";
+        li.addEventListener("click", () => { if (lastReview) { playReview(n.start); $("reviewBox").scrollIntoView({ behavior: "smooth", block: "nearest" }); } });
+      }
       ul.appendChild(li);
     });
     $("resultCard").hidden = false;
@@ -618,7 +673,7 @@ async function startSing() {
   s.stop = () => {
     s.stopOrig();
     if (s.noScore) { // 最初からやり直すときは採点せずにマイクだけ止める
-      if (!done) { done = true; stream.getTracks().forEach((t) => t.stop()); }
+      if (!done) { done = true; recDiscard = true; finalizeRecording(false); stream.getTracks().forEach((t) => t.stop()); }
       return;
     }
     finish();

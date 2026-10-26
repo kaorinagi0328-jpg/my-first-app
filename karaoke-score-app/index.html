@@ -65,7 +65,7 @@
     <p id="levelInfo" class="muted"></p>
     <p id="livePitch" class="live"></p>
     <p id="nowInfo" class="nowinfo"></p>
-    <canvas id="roll" width="900" height="280"></canvas>
+    <canvas id="roll" width="900" height="230"></canvas>
     <div id="lyricStrip" class="lyrics"></div>
     <p class="muted">青＝お手本の音（ドレミ付き）／ 黄色い太線＝歌った音の高さ ／ 採点後は緑＝合っている・赤＝ずれている音になります</p>
   </section>
@@ -89,6 +89,15 @@
     <div class="bar"><div id="xpBar"></div></div>
     <p id="xpInfo" class="muted"></p>
     <ul id="noteResults"></ul>
+    <div id="reviewBox" hidden>
+      <p class="game">🔁 自分の歌を聞き直そう</p>
+      <p><audio id="reviewAudio" controls preload="auto"></audio></p>
+      <p>
+        <button id="reviewPlay" type="button">▶ 歌声に合わせてバーも再生</button>
+        <button id="reviewStop" type="button" disabled>■ バー再生を止める</button>
+      </p>
+      <p class="muted">音程バー（緑＝合っていた音・赤＝ずれた音）と歌詞を見ながら聞き直せます。上の結果リストで「×」の音をタップすると、その場所から聞き直せます。録音はこの端末の中だけにあり、どこにも送られません。</p>
+    </div>
   </section>
 </main>
 <script src="app.js"></script>

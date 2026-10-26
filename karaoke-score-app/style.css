@@ -2,7 +2,10 @@ body{font-family:system-ui,-apple-system,"Hiragino Sans",sans-serif;margin:0;bac
 header{padding:14px 16px 2px;max-width:960px;margin:auto;text-align:center}
 header h1{font-size:34px;margin:0;letter-spacing:.04em;font-weight:900;background:linear-gradient(90deg,#22d3ee,#818cf8,#e879f9,#fbbf24);-webkit-background-clip:text;background-clip:text;color:transparent}
 header p{color:#a5b0d6;margin:8px 0 0}
-main{max-width:960px;margin:auto;padding:8px 16px 40px;display:grid;gap:16px}
+main{max-width:880px;margin:auto;padding:8px 16px 40px;display:grid;gap:16px}
+audio{width:100%}
+#noteResults li.miss{cursor:pointer;text-decoration:underline dotted}
+#noteResults li.miss:hover{color:#fda4af}
 .card{background:rgba(23,29,62,.88);border:1px solid #39447c;border-radius:16px;padding:16px 18px;box-shadow:0 4px 18px rgba(0,0,0,.45)}
 .card h2{margin-top:2px;color:#7dd3fc;letter-spacing:.03em;border-bottom:2px solid #2c3768;padding-bottom:6px}
 button,.file{display:inline-block;background:linear-gradient(90deg,#2563eb,#06b6d4);color:#fff;border:0;border-radius:999px;padding:11px 20px;font-size:16px;font-weight:700;cursor:pointer;margin:4px 4px 4px 0;box-shadow:0 2px 10px rgba(37,99,235,.45)}
