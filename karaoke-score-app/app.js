@@ -52,10 +52,22 @@ function parseMusicXML(text) {
   doc.querySelectorAll("score-part").forEach((sp) => {
     names[sp.getAttribute("id")] = sp.querySelector("part-name")?.textContent || sp.getAttribute("id");
   });
+  // 演奏順（繰り返し・D.S.・コーダ）の指定があれば読み取る: 例 "1-28:1,29:1,1-28:2,30:2,17-28:1,31-34:1"（範囲:歌詞の番）
+  let order = null;
+  const orderField = doc.querySelector('miscellaneous-field[name="performance-order"]');
+  if (orderField && orderField.textContent.trim()) {
+    order = orderField.textContent.trim().split(",").map((seg) => {
+      const m = seg.trim().match(/^(\d+)(?:-(\d+))?(?::(\d+))?$/);
+      return m ? { from: Number(m[1]), to: Number(m[2] || m[1]), verse: Number(m[3] || 1) } : null;
+    }).filter(Boolean);
+    if (!order.length) order = null;
+  }
   const parts = [];
   doc.querySelectorAll("part").forEach((partEl) => {
     const notes = []; let cursor = 0, divisions = 1;
-    partEl.querySelectorAll("measure").forEach((measure) => {
+    const measureStarts = [0]; // 1小節目の開始拍=0。以降は1始まりで measureStarts[小節番号]
+    partEl.querySelectorAll("measure").forEach((measure, mIdx) => {
+      measureStarts[mIdx + 1] = cursor;
       let mCursor = cursor; const mStart = cursor; let maxEnd = cursor;
       measure.querySelectorAll(":scope > *").forEach((el) => {
         if (el.tagName === "attributes") {
@@ -99,7 +111,7 @@ function parseMusicXML(text) {
               } else {
                 const lyrics = {};
                 el.querySelectorAll("lyric").forEach((ly) => { const t = ly.querySelector("text")?.textContent; if (t) lyrics[ly.getAttribute("number") || "1"] = t; });
-                notes.push({ midi, start, dur, lyrics, lyric: lyrics["1"] || null, lyricSubs: [] });
+                notes.push({ midi, start, dur, lyrics, lyric: lyrics["1"] || null, lyricSubs: [], measure: mIdx + 1 });
               }
             }
           }
@@ -108,10 +120,37 @@ function parseMusicXML(text) {
       });
       cursor = maxEnd > mStart ? maxEnd : cursor;
     });
-    if (notes.length) parts.push({ name: names[partEl.getAttribute("id")] || partEl.getAttribute("id"), notes });
+    measureStarts[measureStarts.length] = cursor;
+    if (notes.length) parts.push({ name: names[partEl.getAttribute("id")] || partEl.getAttribute("id"), notes, measureStarts });
   });
   if (!parts.length) throw new Error("音符のあるパートが見つかりませんでした");
-  return { title, bpm, beatsPerMeasure, parts };
+  // 演奏順に展開した音符列も用意する（元の並びは rawNotes として残す）
+  if (order) {
+    const pickVerse = (lyrics, v) => {
+      if (!lyrics) return lyrics;
+      const t = lyrics[String(v)] != null ? lyrics[String(v)] : (lyrics["1"] || null);
+      return { "1": t, "2": t };
+    };
+    parts.forEach((p) => {
+      p.rawNotes = p.notes;
+      const byMeasure = {};
+      p.notes.forEach((n) => { (byMeasure[n.measure] = byMeasure[n.measure] || []).push(n); });
+      const expanded = []; let cur = 0;
+      order.forEach((seg) => {
+        for (let m = seg.from; m <= seg.to; m++) {
+          const mStart = p.measureStarts[m] || 0;
+          const mLen = (p.measureStarts[m + 1] != null ? p.measureStarts[m + 1] : mStart) - mStart;
+          (byMeasure[m] || []).forEach((n) => {
+            expanded.push({ ...n, start: cur + (n.start - mStart), lyrics: pickVerse(n.lyrics, seg.verse), lyricSubs: (n.lyricSubs || []).map((s) => ({ off: s.off, lyrics: pickVerse(s.lyrics, seg.verse) })) });
+          });
+          cur += mLen;
+        }
+      });
+      p.orderedNotes = expanded;
+      p.notes = expanded;
+    });
+  }
+  return { title, bpm, beatsPerMeasure, parts, order };
 }
 
 // ---------- 音程検出（自己相関） ----------
@@ -542,7 +581,9 @@ function setSong(s) {
   const sel = $("partSelect"); sel.innerHTML = "";
   s.parts.forEach((p, i) => { const o = document.createElement("option"); o.value = i; o.textContent = p.name + "（" + p.notes.length + "音）"; sel.appendChild(o); });
   sel.disabled = false; $("playModel").disabled = false; $("singBtn").disabled = false; $("restartBtn").disabled = false; $("warmupBtn").disabled = false;
-  $("status").textContent = "パートを選んで「お手本を聞く」か「歌ってバトル！」を押してください";
+  const ow = $("orderWrap");
+  if (ow) { ow.hidden = !s.order; if (s.order) $("orderMode").checked = true; }
+  $("status").textContent = "パートを選んで「お手本を聞く」か「歌ってバトル！」を押してください" + (s.order ? "（演奏順モード：繰り返し・コーダまで通して再生します）" : "");
   $("resultCard").hidden = true;
   stopReviewLoop(); if (lastReview && lastReview.url) URL.revokeObjectURL(lastReview.url); lastReview = null;
   const rb = $("reviewBox"); if (rb) rb.hidden = true; const ra = $("reviewAudio"); if (ra) { ra.pause(); ra.removeAttribute("src"); }
@@ -551,6 +592,14 @@ function setSong(s) {
 }
 $("partSelect").addEventListener("change", () => { if (song) { $("startMeasure").value = "1"; refreshStartMeasures(); buildLyrics(selectedPart().notes); drawRoll(selectedPart().notes, null, null); } });
 $("verseSelect").addEventListener("change", () => { if (lyricNotes.length) buildLyrics(lyricNotes); });
+$("orderMode").addEventListener("change", () => {
+  if (!song || !song.order) return;
+  stopAll();
+  song.parts.forEach((p) => { p.notes = $("orderMode").checked ? p.orderedNotes : p.rawNotes; });
+  $("startMeasure").value = "1";
+  refreshStartMeasures(); buildLyrics(selectedPart().notes); drawRoll(selectedPart().notes, null, null);
+  $("status").textContent = $("orderMode").checked ? "演奏順で再生します（繰り返し・コーダあり）" : "楽譜の並びどおり（繰り返しなし）で再生します";
+});
 $("tempo").addEventListener("input", () => { $("tempoVal").textContent = $("tempo").value; });
 $("loadSample").addEventListener("click", () => setSong(sampleSong()));
 $("fileInput").addEventListener("change", async (e) => {
