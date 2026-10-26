@@ -367,6 +367,16 @@ function drawRoll(notes, sung, playheadBeat, overlayText, view) {
 }
 
 // ---------- 採点 ----------
+// 区間 [from,to] を0.1拍ごとのマスに分け、条件を満たす音声があるマスの割合を返す
+function binCoverage(trace, from, to, qualify) {
+  const bin = 0.1; const n = Math.max(1, Math.round((to - from) / bin));
+  let hit = 0;
+  for (let i = 0; i < n; i++) {
+    const b0 = from + i * bin, b1 = b0 + bin;
+    if (trace.some((p) => p.beat >= b0 && p.beat < b1 && qualify(p))) hit++;
+  }
+  return hit / n;
+}
 function scorePerformance(notes, rawTrace) {
   const trace = smoothTrace(rawTrace);
   const scored = notes.map((n) => {
@@ -380,8 +390,27 @@ function scorePerformance(notes, rawTrace) {
     const points = a <= 50 ? 100 : a <= 100 ? 70 : a <= 150 ? 40 : 0;
     return { cents, ok: a <= 100, points, label: a <= 50 ? "◎ ぴったり" : a <= 100 ? "○ ほぼ合っている" : "× " + (cents > 0 ? "高すぎ" : "低すぎ") };
   });
-  const total = Math.round(scored.reduce((s, r) => s + (r.points || 0), 0) / Math.max(1, scored.length));
-  return { scored, total };
+  const pitchTotal = Math.round(scored.reduce((s, r) => s + (r.points || 0), 0) / Math.max(1, scored.length));
+  // 「のばす・きる」評価: 長い音を最後まで保てたか、休みのところでピタッと止まれたか
+  const foldCents = (c) => { if ($("octaveOk").checked) { while (c > 600) c -= 1200; while (c < -600) c += 1200; } return c; };
+  const isNear = (p, midi) => Math.abs(foldCents((p.midiF - midi) * 100)) <= 200;
+  const gradeArt = (r) => r >= 0.75 ? 1 : r >= 0.5 ? 0.6 : r >= 0.3 ? 0.3 : 0;
+  const holds = [];
+  notes.forEach((n) => { if (n.dur >= 1.5) holds.push(gradeArt(binCoverage(trace, n.start + n.dur * 0.1, n.start + n.dur * 0.95, (p) => isNear(p, n.midi)))); });
+  const cuts = [];
+  for (let i = 0; i + 1 < notes.length; i++) {
+    const end = notes[i].start + notes[i].dur, gap = notes[i + 1].start - end;
+    if (gap >= 0.75) cuts.push(gradeArt(1 - binCoverage(trace, end + gap * 0.2, notes[i + 1].start - gap * 0.2, () => true)));
+  }
+  const avgA = (a) => a.length ? a.reduce((s, x) => s + x, 0) / a.length : null;
+  const holdScore = avgA(holds), cutScore = avgA(cuts);
+  const aParts = [];
+  if (holdScore != null) aParts.push({ w: 0.6, v: holdScore });
+  if (cutScore != null) aParts.push({ w: 0.4, v: cutScore });
+  const wSum = aParts.reduce((s, p) => s + p.w, 0);
+  const bonus = aParts.length ? Math.round(10 * aParts.reduce((s, p) => s + p.w * p.v, 0) / wSum) : 0;
+  const total = Math.min(100, pitchTotal + bonus);
+  return { scored, total, pitchTotal, bonus, holdScore, cutScore, holdN: holds.length, cutN: cuts.length };
 }
 
 // ---------- 練習サポート（途中から・歌詞・現在位置） ----------
@@ -833,7 +862,38 @@ async function startSing() {
     if (isBest) save.best[bestKey] = result.total;
     storeSave(save); const L = levelOf(save.xp);
     const praise = result.total >= 90 ? "すごい！完璧にちかいよ！" : result.total >= 70 ? "とても上手！" : result.total >= 50 ? "よくがんばった！" : "れんしゅうあるのみ！次はもっとできるよ";
-    $("gameResult").innerHTML = praise + "<br>" + "★".repeat(stars) + "☆".repeat(3 - stars) + "　達成率 " + achieve + "% ・ 最大コンボ " + maxCombo + " ・ +" + result.total + " XPゲット！" + (L.level > beforeLv ? "<br>🎉 レベルアップ！ レベル " + L.level + " になったよ！" : "") + (isBest && prevBest > 0 ? "<br>🏆 自己ベスト更新！（前: " + prevBest + "点）" : "");
+    // ランク分けと、良かったところ・レベルアップへのコメント
+    const rank = result.total >= 90 ? "Sランク：カラオケ★マスター" : result.total >= 75 ? "Aランク：うたの達人" : result.total >= 60 ? "Bランク：うたうまさん" : result.total >= 40 ? "Cランク：がんばりやさん" : "Dランク：れんしゅう中";
+    const good = [], tips = [];
+    const perfectN = result.scored.filter((r) => r.points === 100).length;
+    const missedN = result.scored.filter((r) => r.cents == null).length;
+    if (perfectN >= Math.max(3, notes.length / 3)) good.push("音程ぴったり（◎）が " + perfectN + " 個もあったよ");
+    if (maxCombo >= 8) good.push(maxCombo + " コンボ続いたのがすごい");
+    if (result.holdScore != null && result.holdScore >= 0.8) good.push("長く伸ばす音を、最後までしっかり保てていたよ");
+    if (result.cutScore != null && result.cutScore >= 0.8) good.push("休むところでピタッと止められていたよ");
+    if (notes.length >= 8) {
+      const half = Math.floor(result.scored.length / 2);
+      const avgPts = (arr) => arr.length ? arr.reduce((s, r) => s + (r.points || 0), 0) / arr.length : 0;
+      if (avgPts(result.scored.slice(half)) - avgPts(result.scored.slice(0, half)) >= 12) good.push("後半にかけてどんどん上手くなったよ");
+    }
+    let worstI = -1, worstA = 100;
+    result.scored.forEach((r, i) => { if (r.cents != null && Math.abs(r.cents) > worstA) { worstA = Math.abs(r.cents); worstI = i; } });
+    if (worstI >= 0) tips.push((worstI + 1) + "音目（♪" + NOTE_NAMES[((notes[worstI].midi % 12) + 12) % 12] + "）が一番ずれていたよ（" + (result.scored[worstI].cents > 0 ? "高すぎ" : "低すぎ") + "）。そこを何回か練習しよう");
+    if (missedN > 0) tips.push("声が取れなかった音が " + missedN + " 個あったよ。もう少し大きな声で歌ってみよう");
+    if (result.holdScore != null && result.holdScore < 0.5) tips.push("長く伸ばす音が途中で切れがち。息をたっぷり吸って、音符の最後まで伸ばそう");
+    if (result.cutScore != null && result.cutScore < 0.5) tips.push("休むところで声が残りがち。切れ目でピタッと止めるのを意識しよう");
+    if (!good.length) good.push("最後まで歌い切ったのがえらい");
+    if (!tips.length) tips.push("この調子！ もっと難しいステージや速いテンポにも挑戦してみよう");
+    const artLine = (result.holdN || result.cutN)
+      ? "<br>音程 " + result.pitchTotal + "点 ＋ のばす・きるボーナス +" + result.bonus + "点" +
+        (result.holdScore != null ? "（のばす: " + (result.holdScore >= 0.8 ? "◎" : result.holdScore >= 0.5 ? "○" : result.holdScore >= 0.3 ? "△" : "×") : "") +
+        (result.holdScore != null && result.cutScore != null ? " ／ " : "") +
+        (result.cutScore != null ? "きる: " + (result.cutScore >= 0.8 ? "◎" : result.cutScore >= 0.5 ? "○" : result.cutScore >= 0.3 ? "△" : "×") + "）" : (result.holdScore != null ? "）" : ""))
+      : "";
+    $("gameResult").innerHTML = "🏆 " + rank + "<br>" + praise + "<br>" + "★".repeat(stars) + "☆".repeat(3 - stars) + "　達成率 " + achieve + "% ・ 最大コンボ " + maxCombo + " ・ +" + result.total + " XPゲット！" + artLine +
+      "<br>👏 よかったところ: " + good.slice(0, 2).join("／") +
+      "<br>🎯 レベルアップには: " + tips.slice(0, 2).join("／") +
+      (L.level > beforeLv ? "<br>🎉 レベルアップ！ レベル " + L.level + " になったよ！" : "") + (isBest && prevBest > 0 ? "<br>🏆 自己ベスト更新！（前: " + prevBest + "点）" : "");
     $("xpBar").style.width = Math.round((L.into / L.need) * 100) + "%";
     $("xpInfo").textContent = "レベル " + L.level + " ・ 経験値 " + save.xp + " XP（次のレベルまで あと " + (L.need - L.into) + " XP）";
     updateLevelInfo();
