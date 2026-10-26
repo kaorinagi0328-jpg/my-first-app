@@ -207,24 +207,26 @@ function clickTone(at, accent, dest) {
   return osc;
 }
 function countInBeats() { return $("countIn") && $("countIn").checked ? (song.beatsPerMeasure || 4) : 0; }
-function scheduleModel(notes, onEnded) {
+function scheduleModel(notes, onEnded, endNotes) {
   const ctx = ensureCtx(); const spb = secPerBeat();
   const countIn = countInBeats();
   const startAt = ctx.currentTime + 0.15 + countIn * spb;
+  // 終了タイミングの基準（ガイド音が短いパートでも、自分のパートの終わりまで続けるため）
+  const lenNotes = (endNotes && endNotes.length) ? endNotes : notes;
   // 全ての音を1つのマスター音量経由にし、停止時はマスターを切断+全オシレータ停止で即時に音を止める
   // (予約済みの音は setTimeout を消すだけでは止まらないため)
   const master = ctx.createGain(); master.gain.value = 1; master.connect(ctx.destination);
-  const oscs = notes.map((n) => playTone(n.midi, startAt + n.start * spb, n.dur * spb, master));
+  const oscs = notes.map((n) => playTone(n.midi, startAt + n.start * spb, n.dur * spb, master, n.gain != null ? 0.18 * n.gain : 0.18));
   // メトロノーム: カウントインから曲の終わりまで全拍クリック (小節頭は高い音でアクセント)
   if ($("metronome") && $("metronome").checked) {
     const measure = song.beatsPerMeasure || 4;
-    const totalBeats = Math.ceil(Math.max(...notes.map((n) => n.start + n.dur)));
+    const totalBeats = Math.ceil(Math.max(...lenNotes.map((n) => n.start + n.dur)));
     for (let b = -countIn; b < totalBeats; b++) {
       const accent = ((b % measure) + measure) % measure === 0;
       oscs.push(clickTone(startAt + b * spb, accent, master));
     }
   }
-  const totalSec = songLengthSec(notes);
+  const totalSec = songLengthSec(lenNotes);
   let endTimer = null; let pausedFlag = false;
   const armEnd = (delaySec) => { endTimer = setTimeout(() => { try { master.disconnect(); } catch {} onEnded(); }, Math.max(0, delaySec) * 1000); };
   armEnd((startAt - ctx.currentTime) + totalSec + 0.3);
@@ -384,13 +386,29 @@ function scorePerformance(notes, rawTrace) {
 
 // ---------- 練習サポート（途中から・歌詞・現在位置） ----------
 let practiceEnd = null; // 練習範囲の終わりの小節（その小節まで含む）。null=最後まで
-function segmentNotes() {
-  const all = selectedPart().notes;
+function segmentNotesOf(part) {
+  const all = part.notes;
   const bpp = song.beatsPerMeasure || 4;
   const sb = (Number($("startMeasure").value || 1) - 1) * bpp;
   const eb = practiceEnd ? practiceEnd * bpp : Infinity;
   if (!sb && !isFinite(eb)) return all;
   return all.filter((n) => n.start >= sb - 1e-9 && n.start < eb - 1e-9).map((n) => ({ ...n, start: n.start - sb }));
+}
+function segmentNotes() { return segmentNotesOf(selectedPart()); }
+// ステージに応じたガイド音（採点対象は自分のパートのまま、聞こえる音だけ変える）
+function guideNotesFor(target) {
+  const stage = $("stageSelect") ? Number($("stageSelect").value || 1) : 1;
+  if (!song || song.parts.length < 2 || stage === 1) return target;
+  const selIdx = Number($("partSelect").value || 0);
+  const other = song.parts[(selIdx + 1) % song.parts.length];
+  const otherSeg = segmentNotesOf(other);
+  if (stage === 3) return otherSeg; // 相手パートだけ
+  return target.concat(otherSeg.map((n) => ({ ...n, gain: 0.5 }))); // 両パート（相手は小さめ）
+}
+function stageNote() {
+  const stage = $("stageSelect") ? Number($("stageSelect").value || 1) : 1;
+  if (!song || song.parts.length < 2) return "";
+  return stage === 2 ? "（ステージ2：両パートが流れます）" : stage === 3 ? "（ステージ3：相手パートだけ流れます。自分のパートを歌ってね）" : "";
 }
 function pageView(beat, notes) {
   const total = Math.max(...notes.map((n) => n.start + n.dur));
@@ -617,7 +635,8 @@ function setSong(s) {
   $("resultCard").hidden = true;
   stopReviewLoop(); if (lastReview && lastReview.url) URL.revokeObjectURL(lastReview.url); lastReview = null;
   const rb = $("reviewBox"); if (rb) rb.hidden = true; const ra = $("reviewAudio"); if (ra) { ra.pause(); ra.removeAttribute("src"); }
-  refreshStartMeasures(); buildLyrics(selectedPart().notes); updateLevelInfo();
+  refreshStartMeasures(); buildLyrics(selectedPart().notes); updateLevelInfo(); updateForgetBtn();
+  const ss = $("stageSelect"); if (ss) ss.disabled = s.parts.length < 2;
   drawRoll(selectedPart().notes, null, null);
 }
 $("partSelect").addEventListener("change", () => { if (song) { practiceEnd = null; if ($("rangeSelect")) $("rangeSelect").value = "all"; $("startMeasure").value = "1"; refreshStartMeasures(); buildLyrics(selectedPart().notes); drawRoll(selectedPart().notes, null, null); } });
@@ -649,9 +668,25 @@ $("orderMode").addEventListener("change", () => {
 });
 $("tempo").addEventListener("input", () => { $("tempoVal").textContent = $("tempo").value; });
 $("loadSample").addEventListener("click", () => setSong(sampleSong()));
+// 読み込んだ曲はこの端末のブラウザ内にだけ保存し、次に開いたとき自動で復元する（外部送信はしない）
+const LAST_SONG_KEY = "karaoke-score-last-song-v1";
+function rememberSong(text) {
+  try { localStorage.setItem(LAST_SONG_KEY, text); } catch {}
+  updateForgetBtn();
+}
+function updateForgetBtn() {
+  const b = $("forgetSong"); if (!b) return;
+  let has = false; try { has = !!localStorage.getItem(LAST_SONG_KEY); } catch {}
+  b.hidden = !has;
+}
+$("forgetSong").addEventListener("click", () => {
+  try { localStorage.removeItem(LAST_SONG_KEY); } catch {}
+  updateForgetBtn();
+  $("status").textContent = "この端末に保存した曲を消しました（今ひらいている曲はそのまま使えます）";
+});
 $("fileInput").addEventListener("change", async (e) => {
   const f = e.target.files[0]; if (!f) return;
-  try { setSong(parseMusicXML(await f.text())); }
+  try { const text = await f.text(); setSong(parseMusicXML(text)); rememberSong(text); }
   catch (err) { $("status").textContent = "読み込み失敗: " + err.message + "（.mxl 圧縮形式は未対応です。.musicxml で書き出してください）"; }
 });
 $("pasteLoad").addEventListener("click", () => {
@@ -659,7 +694,7 @@ $("pasteLoad").addEventListener("click", () => {
   const i = text.indexOf("<");
   if (i > 0) text = text.slice(i); // 先頭に余分な文字（ブラウザの表示注記など）が混ざっても読み込めるように
   if (!text) { $("pasteStatus").textContent = "まず楽譜の中身を貼り付けてください"; return; }
-  try { setSong(parseMusicXML(text)); $("pasteStatus").textContent = "読み込みました"; $("pasteArea").value = ""; }
+  try { setSong(parseMusicXML(text)); rememberSong(text); $("pasteStatus").textContent = "読み込みました"; $("pasteArea").value = ""; }
   catch (err) { $("pasteStatus").textContent = "読み込み失敗: " + err.message; }
 });
 async function loadFromDrive(idOrUrl) {
@@ -669,7 +704,7 @@ async function loadFromDrive(idOrUrl) {
   if (!res.ok) throw new Error("ドライブから取得できませんでした (HTTP " + res.status + ")");
   const text = await res.text();
   if (!text.includes("<score-partwise")) throw new Error("楽譜データが返ってきませんでした。共有設定が「リンクを知っている全員が閲覧可」になっているか確認してください");
-  setSong(parseMusicXML(text));
+  setSong(parseMusicXML(text)); rememberSong(text);
 }
 $("driveLoad").addEventListener("click", async () => {
   const v = $("driveUrl").value.trim();
@@ -713,9 +748,9 @@ $("reviewStop").addEventListener("click", () => { const a = $("reviewAudio"); if
 $("stopBtn").addEventListener("click", () => { stopAll(); $("status").textContent = "止めました"; });
 function startModel() {
   stopAll(); mode = "model"; const notes = segmentNotes(); buildLyrics(notes);
-  const s = scheduleModel(notes, () => { $("status").textContent = "再生が終わりました"; $("stopBtn").disabled = true; resetPauseBtn(); });
+  const s = scheduleModel(guideNotesFor(notes), () => { $("status").textContent = "再生が終わりました"; $("stopBtn").disabled = true; resetPauseBtn(); }, notes);
   playing = s; $("stopBtn").disabled = false; { const pb = $("pauseBtn"); pb.disabled = false; pb.textContent = "⏸ 一時停止"; }
-  $("status").textContent = s.countIn ? "カウントイン… 数字が0になったら始まります" : "お手本を再生中…";
+  $("status").textContent = (s.countIn ? "カウントイン… 数字が0になったら始まります" : "お手本を再生中…") + stageNote();
   const spb = secPerBeat(); const ctx = ensureCtx();
   (function tick() {
     if (playing !== s) return;
@@ -736,8 +771,8 @@ async function startSing() {
   const src = ctx.createMediaStreamSource(stream);
   const analyser = ctx.createAnalyser(); analyser.fftSize = 2048; src.connect(analyser);
   const buf = new Float32Array(analyser.fftSize);
-  const s = scheduleModel(notes, finish);
-  $("status").textContent = s.countIn ? "カウントイン… 大きな数字が0になったら歌い始めてください" : "お手本に合わせて歌ってください";
+  const s = scheduleModel(guideNotesFor(notes), finish, notes);
+  $("status").textContent = (s.countIn ? "カウントイン… 大きな数字が0になったら歌い始めてください" : "お手本に合わせて歌ってください") + stageNote();
   playing = s; $("stopBtn").disabled = false; { const pb = $("pauseBtn"); pb.disabled = false; pb.textContent = "⏸ 一時停止"; }
   const trace = []; const spb = secPerBeat(); let done = false; const recent = [];
   // 聞き直し用に歌声を録音する（端末内のみ。外部送信はしない）
@@ -851,3 +886,14 @@ $("restartBtn").addEventListener("click", () => {
   if (mode === "sing") startSing(); else startModel();
 });
 updateLevelInfo();
+// 前回読み込んだ曲がこの端末に保存されていれば復元する（?song= 指定があるときは、そちらを優先）
+if (!songParam) {
+  try {
+    const savedText = localStorage.getItem(LAST_SONG_KEY);
+    if (savedText) {
+      setSong(parseMusicXML(savedText));
+      $("status").textContent = "前回読み込んだ曲を自動で復元しました（別の曲を読み込むと入れ替わります）";
+    }
+  } catch { try { localStorage.removeItem(LAST_SONG_KEY); } catch {} }
+}
+updateForgetBtn();

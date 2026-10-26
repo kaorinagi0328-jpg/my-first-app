@@ -33,6 +33,7 @@
       <p><button id="pasteLoad" type="button">貼り付けた楽譜を読み込む</button> <span id="pasteStatus" class="muted"></span></p>
     </details>
     <p id="songTitle" class="muted">まだ楽譜が読み込まれていません</p>
+    <p><button id="forgetSong" type="button" hidden>この端末に保存した曲を消す</button> <span class="muted">読み込んだ曲は、この端末の中にだけ保存されて、次に開いたとき自動で復元されます</span></p>
     <label>パート
       <select id="partSelect" disabled></select>
     </label>
@@ -56,6 +57,13 @@
 
   <section class="card">
     <h2>🎤 バトル（練習と採点）</h2>
+    <p><label>ステージ
+      <select id="stageSelect">
+        <option value="1">ステージ1：自分のパートだけ聞く</option>
+        <option value="2">ステージ2：上下両方のパートを聞く</option>
+        <option value="3">ステージ3：相手のパートだけ聞く（上級）</option>
+      </select>
+    </label></p>
     <div class="controls">
       <p>
         <button id="warmupBtn" type="button" disabled>🎯 音程合わせチャレンジ</button>
