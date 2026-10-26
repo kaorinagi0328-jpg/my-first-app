@@ -150,7 +150,13 @@ function parseMusicXML(text) {
       p.notes = expanded;
     });
   }
-  return { title, bpm, beatsPerMeasure, parts, order };
+  // 演奏順の各区間が、展開後の何小節目〜何小節目にあたるか（練習範囲の選択肢に使う）
+  let segRanges = null;
+  if (order) {
+    let perf = 1;
+    segRanges = order.map((seg) => { const len = seg.to - seg.from + 1; const r = { ...seg, fromPerf: perf, toPerf: perf + len - 1 }; perf += len; return r; });
+  }
+  return { title, bpm, beatsPerMeasure, parts, order, segRanges };
 }
 
 // ---------- 音程検出（自己相関） ----------
@@ -377,11 +383,14 @@ function scorePerformance(notes, rawTrace) {
 }
 
 // ---------- 練習サポート（途中から・歌詞・現在位置） ----------
+let practiceEnd = null; // 練習範囲の終わりの小節（その小節まで含む）。null=最後まで
 function segmentNotes() {
   const all = selectedPart().notes;
-  const sb = (Number($("startMeasure").value || 1) - 1) * (song.beatsPerMeasure || 4);
-  if (!sb) return all;
-  return all.filter((n) => n.start >= sb - 1e-9).map((n) => ({ ...n, start: n.start - sb }));
+  const bpp = song.beatsPerMeasure || 4;
+  const sb = (Number($("startMeasure").value || 1) - 1) * bpp;
+  const eb = practiceEnd ? practiceEnd * bpp : Infinity;
+  if (!sb && !isFinite(eb)) return all;
+  return all.filter((n) => n.start >= sb - 1e-9 && n.start < eb - 1e-9).map((n) => ({ ...n, start: n.start - sb }));
 }
 function pageView(beat, notes) {
   const total = Math.max(...notes.map((n) => n.start + n.dur));
@@ -426,6 +435,25 @@ function updateCurrent(notes, beat) {
   if (on) on.scrollIntoView({ inline: "center", block: "nearest" });
   const n = idx >= 0 ? notes[idx] : null;
   $("nowInfo").textContent = n ? "♪ " + NOTE_NAMES[((n.midi % 12) + 12) % 12] + (curText ? " ・ " + curText : "") : "";
+}
+// 演奏順の区間から「練習範囲」の選択肢を作る（1番だけ / 2番だけ / 2番から最後まで / D.S.から最後まで）
+function buildRangeOptions() {
+  const sel = $("rangeSelect"); if (!sel) return;
+  sel.innerHTML = "";
+  const add = (val, label) => { const o = document.createElement("option"); o.value = val; o.textContent = label; sel.appendChild(o); };
+  add("all", "ぜんぶ（通し）");
+  if (!song || !song.segRanges) return;
+  const segs = song.segRanges;
+  const total = segs[segs.length - 1].toPerf;
+  const i2 = segs.findIndex((s) => s.verse === 2);
+  if (i2 > 0) add("1-" + segs[i2 - 1].toPerf, "1番だけ");
+  if (i2 >= 0) {
+    let lastV2 = i2; segs.forEach((s, i) => { if (s.verse === 2) lastV2 = i; });
+    add(segs[i2].fromPerf + "-" + segs[lastV2].toPerf, "2番だけ");
+    add(segs[i2].fromPerf + "-" + total, "2番から最後まで");
+    if (lastV2 < segs.length - 1) add(segs[lastV2 + 1].fromPerf + "-" + total, "D.S.から最後まで");
+  }
+  sel.value = "all";
 }
 function refreshStartMeasures() {
   if (!song) return;
@@ -583,6 +611,8 @@ function setSong(s) {
   sel.disabled = false; $("playModel").disabled = false; $("singBtn").disabled = false; $("restartBtn").disabled = false; $("warmupBtn").disabled = false;
   const ow = $("orderWrap");
   if (ow) { ow.hidden = !s.order; if (s.order) $("orderMode").checked = true; }
+  practiceEnd = null; buildRangeOptions();
+  const rw = $("rangeWrap"); if (rw) rw.hidden = !s.order;
   $("status").textContent = "パートを選んで「お手本を聞く」か「歌ってバトル！」を押してください" + (s.order ? "（演奏順モード：繰り返し・コーダまで通して再生します）" : "");
   $("resultCard").hidden = true;
   stopReviewLoop(); if (lastReview && lastReview.url) URL.revokeObjectURL(lastReview.url); lastReview = null;
@@ -590,15 +620,32 @@ function setSong(s) {
   refreshStartMeasures(); buildLyrics(selectedPart().notes); updateLevelInfo();
   drawRoll(selectedPart().notes, null, null);
 }
-$("partSelect").addEventListener("change", () => { if (song) { $("startMeasure").value = "1"; refreshStartMeasures(); buildLyrics(selectedPart().notes); drawRoll(selectedPart().notes, null, null); } });
+$("partSelect").addEventListener("change", () => { if (song) { practiceEnd = null; if ($("rangeSelect")) $("rangeSelect").value = "all"; $("startMeasure").value = "1"; refreshStartMeasures(); buildLyrics(selectedPart().notes); drawRoll(selectedPart().notes, null, null); } });
+$("rangeSelect").addEventListener("change", () => {
+  if (!song) return;
+  stopAll();
+  const val = $("rangeSelect").value;
+  if (val === "all") { practiceEnd = null; $("startMeasure").value = "1"; }
+  else { const ab = val.split("-").map(Number); $("startMeasure").value = String(ab[0]); practiceEnd = ab[1]; }
+  const notes = segmentNotes(); buildLyrics(notes); drawRoll(notes, null, null);
+  const label = $("rangeSelect").selectedOptions[0].textContent;
+  $("status").textContent = "練習範囲: " + label + (practiceEnd ? "（演奏順の " + $("startMeasure").value + "〜" + practiceEnd + " 小節目）" : "（最初から最後まで）") + "。お手本を聞くか、歌ってバトル！を押してね";
+});
+$("startMeasure").addEventListener("change", () => {
+  // 「練習のはじめ」を手で変えたら、範囲指定は外して『その小節から最後まで』にする
+  practiceEnd = null; const rs = $("rangeSelect"); if (rs) rs.value = "all";
+});
 $("verseSelect").addEventListener("change", () => { if (lyricNotes.length) buildLyrics(lyricNotes); });
 $("orderMode").addEventListener("change", () => {
   if (!song || !song.order) return;
   stopAll();
-  song.parts.forEach((p) => { p.notes = $("orderMode").checked ? p.orderedNotes : p.rawNotes; });
+  const on = $("orderMode").checked;
+  song.parts.forEach((p) => { p.notes = on ? p.orderedNotes : p.rawNotes; });
+  practiceEnd = null; if ($("rangeSelect")) $("rangeSelect").value = "all";
+  const rw = $("rangeWrap"); if (rw) rw.hidden = !on;
   $("startMeasure").value = "1";
   refreshStartMeasures(); buildLyrics(selectedPart().notes); drawRoll(selectedPart().notes, null, null);
-  $("status").textContent = $("orderMode").checked ? "演奏順で再生します（繰り返し・コーダあり）" : "楽譜の並びどおり（繰り返しなし）で再生します";
+  $("status").textContent = on ? "演奏順で再生します（繰り返し・コーダあり）" : "楽譜の並びどおり（繰り返しなし）で再生します";
 });
 $("tempo").addEventListener("input", () => { $("tempoVal").textContent = $("tempo").value; });
 $("loadSample").addEventListener("click", () => setSong(sampleSong()));
