@@ -15,12 +15,18 @@
   <section class="card">
     <h2>1. 楽譜</h2>
     <p>
-      <button id="loadSample" type="button">サンプル曲で試す（かえるの合唱）</button>
+      <button id="loadSample" type="button">サンプル曲で試す（きらきら星）</button>
       <label class="file">MusicXMLを選ぶ
         <input id="fileInput" type="file" hidden>
       </label>
     </p>
     <p class="muted">スマホでは、楽譜ファイルを先に「ファイル」アプリに保存してから選んでください（チャットの添付ファイルを開いて共有ボタン→「ファイルに保存」）。</p>
+    <details>
+      <summary>ファイルが選べないとき（学校のパソコンなど）</summary>
+      <p class="muted">学校のパソコンでは、セキュリティでファイル選択が止められることがあります。そのときは: ①楽譜ファイル（.xml）をメモ帳などで開く ② Ctrl+A → Ctrl+C で全部コピー ③ 下の欄に Ctrl+V で貼り付けて「読み込む」を押す。貼り付けた内容はこの端末の中だけで使われ、どこにも送信されません。</p>
+      <p><textarea id="pasteArea" rows="4" placeholder="ここに楽譜ファイル（MusicXML）の中身を貼り付け"></textarea></p>
+      <p><button id="pasteLoad" type="button">貼り付けた楽譜を読み込む</button> <span id="pasteStatus" class="muted"></span></p>
+    </details>
     <p id="songTitle" class="muted">まだ楽譜が読み込まれていません</p>
     <label>パート
       <select id="partSelect" disabled></select>

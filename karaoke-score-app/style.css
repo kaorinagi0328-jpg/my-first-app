@@ -20,3 +20,6 @@ canvas{width:100%;height:auto;background:#111827;border-radius:10px}
 .bar{background:#e5e7eb;border-radius:999px;height:16px;overflow:hidden;margin:8px 0}
 #xpBar{background:linear-gradient(90deg,#f59e0b,#facc15);height:100%;width:0%;transition:width .6s}
 #restartBtn{background:#059669}
+textarea{width:100%;font-size:12px;padding:6px;box-sizing:border-box}
+details{margin-top:8px}
+summary{cursor:pointer;color:#1a56db}
