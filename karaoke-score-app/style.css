@@ -55,3 +55,5 @@ summary{cursor:pointer;color:#38bdf8}
 #missList{line-height:1.8}
 #missList li.miss{cursor:pointer;text-decoration:underline dotted}
 #allNotes summary{cursor:pointer;color:#93c5fd;margin-top:6px}
+.secbtn{font-size:1.15em;font-weight:700;padding:8px 18px;margin:2px;border-radius:999px;border:2px solid #5b7fff;background:#16213b;color:#dbeafe;cursor:pointer}
+.secbtn.on{background:#5b7fff;color:#fff;box-shadow:0 0 10px #5b7fff88}
