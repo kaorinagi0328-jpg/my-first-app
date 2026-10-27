@@ -775,10 +775,22 @@ $("pasteLoad").addEventListener("click", () => {
 async function loadFromDrive(idOrUrl) {
   const m = String(idOrUrl).match(/[-\w]{25,}/);
   if (!m) throw new Error("リンクからファイルIDが取れませんでした");
-  const res = await fetch("https://drive.google.com/uc?export=download&id=" + m[0]);
-  if (!res.ok) throw new Error("ドライブから取得できませんでした (HTTP " + res.status + ")");
-  const text = await res.text();
-  if (!text.includes("<score-partwise")) throw new Error("楽譜データが返ってきませんでした。共有設定が「リンクを知っている全員が閲覧可」になっているか確認してください");
+  // 新しいダウンロード用アドレスを使う（古い uc?export=download はウイルススキャン警告ページが返ることがある）
+  const urls = [
+    "https://drive.usercontent.google.com/download?id=" + m[0] + "&export=download&confirm=t",
+    "https://drive.google.com/uc?export=download&id=" + m[0],
+  ];
+  let text = null; let lastStatus = 0;
+  for (const u of urls) {
+    try {
+      const res = await fetch(u);
+      lastStatus = res.status;
+      if (!res.ok) continue;
+      const t = await res.text();
+      if (t.includes("<score-partwise")) { text = t; break; }
+    } catch { /* 次のアドレスを試す */ }
+  }
+  if (text == null) throw new Error("楽譜データが返ってきませんでした。共有設定が「リンクを知っている全員が閲覧可」になっているか確認してください" + (lastStatus ? " (HTTP " + lastStatus + ")" : ""));
   setSong(parseMusicXML(text)); rememberSong(text);
 }
 $("driveLoad").addEventListener("click", async () => {
