@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>合奏★マスター｜パート練習バトル</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>🎼 合奏★マスター</h1>
+  <p>自分のパートを攻略せよ！ お手本にピタッと合わせて XP をためて、合奏マスターをめざそう。打楽器パートは手拍子でリズム判定もできるよ。音はこの端末の中だけで処理されます。</p>
+</header>
+<main>
+  <section class="card">
+    <h2>⚔️ クエスト準備（楽譜）</h2>
+    <p>
+      <button id="loadSample" type="button">サンプル曲で試す（きらきら星の合奏）</button>
+      <label class="file">MusicXMLを選ぶ
+        <input id="fileInput" type="file" hidden>
+      </label>
+    </p>
+    <p class="muted">スマホでは、楽譜ファイルを先に「ファイル」アプリに保存してから選んでください（チャットの添付ファイルを開いて共有ボタン→「ファイルに保存」）。</p>
+    <p class="muted">Googleドライブの共有リンクでも読み込めます（ファイルが選べない学校のパソコン向け）:
+      <input id="driveUrl" type="text" size="34" placeholder="ドライブの共有リンクを貼る">
+      <button id="driveLoad" type="button">リンクで読み込む</button>
+      <span id="driveStatus" class="muted"></span>
+    </p>
+    <details>
+      <summary>ファイルが選べないとき（学校のパソコンなど）</summary>
+      <p class="muted">学校のパソコンでは、セキュリティでファイル選択が止められることがあります。そのときは: ①楽譜ファイル（.xml）をメモ帳などで開く ② Ctrl+A → Ctrl+C で全部コピー ③ 下の欄に Ctrl+V で貼り付けて「読み込む」を押す。貼り付けた内容はこの端末の中だけで使われ、どこにも送信されません。</p>
+      <p><textarea id="pasteArea" rows="4" placeholder="ここに楽譜ファイル（MusicXML）の中身を貼り付け"></textarea></p>
+      <p><button id="pasteLoad" type="button">貼り付けた楽譜を読み込む</button> <span id="pasteStatus" class="muted"></span></p>
+    </details>
+    <p id="songTitle" class="muted">まだ楽譜が読み込まれていません</p>
+    <p><button id="forgetSong" type="button" hidden>この端末に保存した曲を消す</button> <span class="muted">読み込んだ曲は、この端末の中にだけ保存されて、次に開いたとき自動で復元されます</span></p>
+    <label>パート
+      <select id="partSelect" disabled></select>
+    </label>
+    <label>練習のはじめ
+      <select id="startMeasure"><option value="1">1小節目から</option></select>
+    </label>
+    <label id="rangeWrap" hidden>練習範囲
+      <select id="rangeSelect"><option value="all">ぜんぶ（通し）</option></select>
+    </label>
+    <p id="sectionWrap" hidden>部分練習（場所えらび） <span id="sectionBtns"></span></p>
+    <label id="verseWrap">歌詞
+      <select id="verseSelect"><option value="1">1番</option><option value="2">2番</option></select>
+    </label>
+    <label>テンポ <span id="tempoVal">100</span>%
+      <input id="tempo" type="range" min="50" max="150" value="100">
+    </label>
+    <label><input id="octaveOk" type="checkbox" checked> オクターブ違いも正解にする</label>
+    <label id="orderWrap" hidden><input id="orderMode" type="checkbox" checked> 演奏順で再生する（繰り返し・D.S.・コーダあり）</label>
+    <label><input id="countIn" type="checkbox" checked> カウントイン（1小節分の予備拍＋大きな数字）</label>
+    <label><input id="metronome" type="checkbox" checked> メトロノーム（小節の頭は高い音）</label>
+  </section>
+
+  <section class="card">
+    <h2 id="battleHead">🎤 演奏バトル（練習と採点）</h2>
+    <p><label>ガイド（聞こえる音）
+      <select id="guideSelect">
+        <option value="own">自分のパートだけ</option>
+        <option value="all">全パート（自分以外は小さめ）</option>
+        <option value="others">自分以外のパート（上級）</option>
+        <option value="metro">メトロノームだけ（最上級）</option>
+      </select>
+    </label></p>
+    <div class="controls">
+      <p>
+        <button id="warmupBtn" type="button" disabled>🎯 音程合わせチャレンジ</button>
+        <button id="playModel" type="button" disabled>▶ お手本を聞く</button>
+        <button id="singBtn" type="button" disabled>🎤 演奏バトル！</button>
+        <button id="stopBtn" type="button" disabled>■ ストップ</button>
+        <button id="pauseBtn" type="button" disabled>⏸ 一時停止</button>
+        <button id="restartBtn" type="button" disabled>⏮ リトライ（最初から）</button>
+      </p>
+      <p id="status" class="muted">まず楽譜を読み込んでください</p>
+    </div>
+    <p id="levelInfo" class="muted"></p>
+    <p id="livePitch" class="live"></p>
+    <p id="nowInfo" class="nowinfo"></p>
+    <canvas id="roll" width="900" height="230"></canvas>
+    <div id="lyricStrip" class="lyrics"></div>
+    <p class="muted">青＝お手本の音（ドレミ付き）／ オレンジ＝打楽器の打つ場所 ／ 黄色い太線＝演奏した音の高さ ／ 採点後は緑＝合っている・赤＝ずれている音になります。打楽器パートは、楽器がなくても手拍子で練習できます</p>
+  </section>
+
+  <section class="card" id="warmupCard" hidden>
+    <h2>🎯 音程合わせチャレンジ</h2>
+    <p id="wuInfo" class="muted">お手本の音を聞いて、自分の楽器で同じ高さを出してみよう。全5問。</p>
+    <p id="wuTarget" class="nowinfo"></p>
+    <canvas id="wuGauge" width="900" height="130"></canvas>
+    <p id="wuResult" class="game"></p>
+    <p>
+      <button id="wuStart" type="button">▶ スタート</button>
+      <button id="wuQuit" type="button">やめる</button>
+    </p>
+  </section>
+
+  <section class="card" id="resultCard" hidden>
+    <h2>🏆 結果発表</h2>
+    <p class="score"><span id="scoreNum">-</span> 点</p>
+    <p id="gameResult" class="game"></p>
+    <div class="bar"><div id="xpBar"></div></div>
+    <p id="xpInfo" class="muted"></p>
+    <p id="noteSummary"></p>
+    <div id="noteStrip"></div>
+    <p id="missHead" class="game" hidden>ずれた音だけ（タップすると、その場所から聞き直せるよ）</p>
+    <ul id="missList"></ul>
+    <details id="allNotes"><summary>すべての音の結果を見る</summary><ul id="noteResults"></ul></details>
+    <div id="reviewBox" hidden>
+      <p class="game">🔁 自分の演奏を聞き直そう</p>
+      <p><audio id="reviewAudio" controls preload="auto"></audio></p>
+      <p>
+        <button id="reviewPlay" type="button">▶ 演奏に合わせてバーも再生</button>
+        <button id="reviewStop" type="button" disabled>■ バー再生を止める</button>
+      </p>
+      <p class="muted">音程バー（緑＝合っていた音・赤＝ずれた音）を見ながら聞き直せます。上の「ずれた音だけ」のリストで音をタップすると、その場所から聞き直せます。録音はこの端末の中だけにあり、どこにも送られません。</p>
+    </div>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
