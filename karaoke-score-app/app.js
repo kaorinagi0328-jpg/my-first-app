@@ -801,7 +801,11 @@ $("driveLoad").addEventListener("click", async () => {
   catch (err) { $("driveStatus").textContent = "読み込み失敗: " + err.message; }
 });
 const songParam = new URLSearchParams(location.search).get("song");
-if (songParam) loadFromDrive(songParam).catch(() => {});
+if (songParam) {
+  $("status").textContent = "曲を読み込み中…";
+  loadFromDrive(songParam).then(() => { $("status").textContent = "曲を読み込みました。パートを選んで「お手本を聞く」か「歌ってバトル！」を押してください"; })
+    .catch((err) => { $("status").textContent = "曲の読み込みに失敗しました: " + err.message + "（この表示を教えてください）"; const ds = $("driveStatus"); if (ds) ds.textContent = "読み込み失敗: " + err.message; });
+}
 function resetPauseBtn() { const b = $("pauseBtn"); if (b) { b.disabled = true; b.textContent = "⏸ 一時停止"; } }
 function stopAll() { if (playing) { playing.stop(); playing = null; } $("stopBtn").disabled = true; resetPauseBtn(); if (typeof cancelWarmup === "function") cancelWarmup(); stopReviewLoop(); const ra = $("reviewAudio"); if (ra) ra.pause(); }
 $("pauseBtn").addEventListener("click", () => {
