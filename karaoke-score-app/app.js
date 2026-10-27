@@ -261,7 +261,7 @@ function scheduleModel(notes, onEnded, endNotes) {
   // 全ての音を1つのマスター音量経由にし、停止時はマスターを切断+全オシレータ停止で即時に音を止める
   // (予約済みの音は setTimeout を消すだけでは止まらないため)
   const master = ctx.createGain(); master.gain.value = 1; master.connect(ctx.destination);
-  const oscs = notes.map((n) => { const at = startAt + conv.toSec(n.start); return playTone(n.midi, at, Math.max(0.05, conv.toSec(n.start + n.dur) - at), master, n.gain != null ? 0.18 * n.gain : 0.18); });
+  const oscs = notes.map((n) => { const at = startAt + conv.toSec(n.start); return playTone(n.midi, at, Math.max(0.05, conv.toSec(n.start + n.dur) - conv.toSec(n.start)), master, n.gain != null ? 0.18 * n.gain : 0.18); });
   // メトロノーム: カウントインから曲の終わりまで全拍クリック (小節頭は高い音でアクセント)
   if ($("metronome") && $("metronome").checked) {
     const measure = song.beatsPerMeasure || 4;
