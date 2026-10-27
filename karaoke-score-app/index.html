@@ -101,7 +101,11 @@
     <p id="gameResult" class="game"></p>
     <div class="bar"><div id="xpBar"></div></div>
     <p id="xpInfo" class="muted"></p>
-    <ul id="noteResults"></ul>
+    <p id="noteSummary"></p>
+    <div id="noteStrip"></div>
+    <p id="missHead" class="game" hidden>ずれた音だけ（タップすると、その場所から聞き直せるよ）</p>
+    <ul id="missList"></ul>
+    <details id="allNotes"><summary>すべての音の結果を見る</summary><ul id="noteResults"></ul></details>
     <div id="reviewBox" hidden>
       <p class="game">🔁 自分の歌を聞き直そう</p>
       <p><audio id="reviewAudio" controls preload="auto"></audio></p>
@@ -109,7 +113,7 @@
         <button id="reviewPlay" type="button">▶ 歌声に合わせてバーも再生</button>
         <button id="reviewStop" type="button" disabled>■ バー再生を止める</button>
       </p>
-      <p class="muted">音程バー（緑＝合っていた音・赤＝ずれた音）と歌詞を見ながら聞き直せます。上の結果リストで「×」の音をタップすると、その場所から聞き直せます。録音はこの端末の中だけにあり、どこにも送られません。</p>
+      <p class="muted">音程バー（緑＝合っていた音・赤＝ずれた音）と歌詞を見ながら聞き直せます。上の「ずれた音だけ」のリストで音をタップすると、その場所から聞き直せます。録音はこの端末の中だけにあり、どこにも送られません。</p>
     </div>
   </section>
 </main>

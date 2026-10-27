@@ -50,3 +50,8 @@ summary{cursor:pointer;color:#38bdf8}
   button#singBtn{font-size:16px;padding:10px 20px}
   label{margin:6px 0}
 }
+#noteStrip{display:flex;gap:1px;height:20px;margin:6px 0 10px;overflow:hidden;border-radius:6px;background:#1e293b}
+#noteStrip i{display:block;height:100%}
+#missList{line-height:1.8}
+#missList li.miss{cursor:pointer;text-decoration:underline dotted}
+#allNotes summary{cursor:pointer;color:#93c5fd;margin-top:6px}

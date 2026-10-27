@@ -924,14 +924,38 @@ async function startSing() {
     finalizeRecording(true, result.scored);
     drawRoll(notes, { trace, scored: result.scored }, null);
     $("scoreNum").textContent = result.total;
+    // 結果はまず要約で見せる: 判定の個数 + 色の帯（1音=1ブロック） + ずれた音だけのリスト。全音リストは折りたたみに
+    const cnt = { p: 0, o: 0, x: 0, none: 0 };
+    result.scored.forEach((r) => { if (r.cents == null) cnt.none++; else if (r.points >= 100) cnt.p++; else if (r.ok) cnt.o++; else cnt.x++; });
+    $("noteSummary").textContent = "◎ ぴったり " + cnt.p + "個　○ ほぼ合っている " + cnt.o + "個　× ずれた " + cnt.x + "個" + (cnt.none ? "　声が取れなかった " + cnt.none + "個" : "");
+    const strip = $("noteStrip"); strip.innerHTML = "";
+    result.scored.forEach((r, i) => {
+      const b = document.createElement("i");
+      b.style.flexGrow = String(Math.max(0.2, notes[i].dur));
+      b.style.background = r.cents == null ? "#64748b" : r.points >= 100 ? "#34d399" : r.ok ? "#0ea5e9" : r.points > 0 ? "#fbbf24" : "#f87171";
+      b.title = (i + 1) + "音目: " + r.label;
+      strip.appendChild(b);
+    });
+    const line = (r, i) => (i + 1) + "音目 " + NOTE_NAMES[((notes[i].midi % 12) + 12) % 12] + ": " + r.label + (r.cents == null ? "" : "（" + (r.cents > 0 ? "+" : "") + r.cents + "セント）");
+    const missUl = $("missList"); missUl.innerHTML = "";
+    let missCount = 0;
+    result.scored.forEach((r, i) => {
+      if (r.ok) return; missCount++;
+      const li = document.createElement("li");
+      li.textContent = line(r, i);
+      li.className = "miss"; li.title = "タップすると、その音の場所から聞き直せます";
+      li.addEventListener("click", () => { if (lastReview) { playReview(notes[i].start); $("reviewBox").scrollIntoView({ behavior: "smooth", block: "nearest" }); } });
+      missUl.appendChild(li);
+    });
+    $("missHead").hidden = missCount === 0;
+    if (!missCount) { const li = document.createElement("li"); li.textContent = "ずれた音はなかったよ！"; missUl.appendChild(li); }
     const ul = $("noteResults"); ul.innerHTML = "";
     result.scored.forEach((r, i) => {
       const li = document.createElement("li");
-      const n = notes[i];
-      li.textContent = (i + 1) + "音目 " + NOTE_NAMES[((n.midi % 12) + 12) % 12] + ": " + r.label + (r.cents == null ? "" : "（" + (r.cents > 0 ? "+" : "") + r.cents + "セント）");
-      if (!r.ok) { // ずれた音はタップでその場所から聞き直せる
+      li.textContent = line(r, i);
+      if (!r.ok) {
         li.className = "miss"; li.title = "タップすると、その音の場所から聞き直せます";
-        li.addEventListener("click", () => { if (lastReview) { playReview(n.start); $("reviewBox").scrollIntoView({ behavior: "smooth", block: "nearest" }); } });
+        li.addEventListener("click", () => { if (lastReview) { playReview(notes[i].start); $("reviewBox").scrollIntoView({ behavior: "smooth", block: "nearest" }); } });
       }
       ul.appendChild(li);
     });
