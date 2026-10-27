@@ -403,7 +403,7 @@ function drawRoll(notes, sung, playheadBeat, overlayText, view) {
       ctx.textAlign = "right"; ctx.font = "12px system-ui, sans-serif";
     }
   };
-  notes.forEach((n) => drawNote(n, n.unpitched ? "#f59e0b" : "#5b7fff"));
+  notes.forEach((n) => drawNote(n, n.unpitched ? "#fb923c" : "#10b981"));
   if (sung && sung.scored) {
     sung.scored.forEach((s, i) => drawNote(notes[i], s.ok ? "rgba(34,197,94,.88)" : "rgba(239,68,68,.88)"));
   }

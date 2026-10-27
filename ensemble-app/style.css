@@ -1,40 +1,40 @@
-body{font-family:system-ui,-apple-system,"Hiragino Sans",sans-serif;margin:0;background:linear-gradient(180deg,#0b1026 0%,#141b3f 55%,#1b1040 100%);background-attachment:fixed;color:#e8ecf8;min-height:100vh}
+body{font-family:system-ui,-apple-system,"Hiragino Sans",sans-serif;margin:0;background:linear-gradient(180deg,#071a12 0%,#0c2b1c 55%,#14382a 100%);background-attachment:fixed;color:#eaf6ee;min-height:100vh}
 header{padding:14px 16px 2px;max-width:960px;margin:auto;text-align:center}
-header h1{font-size:34px;margin:0;letter-spacing:.04em;font-weight:900;background:linear-gradient(90deg,#22d3ee,#818cf8,#e879f9,#fbbf24);-webkit-background-clip:text;background-clip:text;color:transparent}
-header p{color:#a5b0d6;margin:8px 0 0}
+header h1{font-size:34px;margin:0;letter-spacing:.04em;font-weight:900;background:linear-gradient(90deg,#fde68a,#f59e0b,#34d399,#a3e635);-webkit-background-clip:text;background-clip:text;color:transparent}
+header p{color:#a7c4b0;margin:8px 0 0}
 main{max-width:880px;margin:auto;padding:8px 16px 40px;display:grid;gap:16px}
 audio{width:100%}
 #noteResults li.miss{cursor:pointer;text-decoration:underline dotted}
-#noteResults li.miss:hover{color:#fda4af}
-.card{background:rgba(23,29,62,.88);border:1px solid #39447c;border-radius:16px;padding:16px 18px;box-shadow:0 4px 18px rgba(0,0,0,.45);min-width:0}
-.card h2{margin-top:2px;color:#7dd3fc;letter-spacing:.03em;border-bottom:2px solid #2c3768;padding-bottom:6px}
-button,.file{display:inline-block;background:linear-gradient(90deg,#2563eb,#06b6d4);color:#fff;border:0;border-radius:999px;padding:11px 20px;font-size:16px;font-weight:700;cursor:pointer;margin:4px 4px 4px 0;box-shadow:0 2px 10px rgba(37,99,235,.45)}
+#noteResults li.miss:hover{color:#fcd34d}
+.card{background:rgba(9,36,22,.9);border:1px solid #1f5c3d;border-radius:16px;padding:16px 18px;box-shadow:0 4px 18px rgba(0,0,0,.45);min-width:0}
+.card h2{margin-top:2px;color:#fbbf24;letter-spacing:.03em;border-bottom:2px solid #175134;padding-bottom:6px}
+button,.file{display:inline-block;background:linear-gradient(90deg,#059669,#10b981);color:#fff;border:0;border-radius:999px;padding:11px 20px;font-size:16px;font-weight:700;cursor:pointer;margin:4px 4px 4px 0;box-shadow:0 2px 10px rgba(16,185,129,.45)}
 button:active{transform:scale(.97)}
-button:disabled{background:#39406b;color:#8b94b8;cursor:default;box-shadow:none}
-button#singBtn{background:linear-gradient(90deg,#f97316,#ec4899);font-size:19px;padding:13px 26px;box-shadow:0 3px 14px rgba(236,72,153,.5)}
-button#warmupBtn{background:linear-gradient(90deg,#7c3aed,#06b6d4)}
+button:disabled{background:#24463a;color:#84a98f;cursor:default;box-shadow:none}
+button#singBtn{background:linear-gradient(90deg,#f59e0b,#ea580c);font-size:19px;padding:13px 26px;box-shadow:0 3px 14px rgba(245,158,11,.5)}
+button#warmupBtn{background:linear-gradient(90deg,#0d9488,#84cc16)}
 button#stopBtn{background:linear-gradient(90deg,#dc2626,#991b1b)}
-button#restartBtn{background:linear-gradient(90deg,#059669,#14b8a6)}
+button#restartBtn{background:linear-gradient(90deg,#b45309,#f59e0b)}
 label{display:block;margin:10px 0}
-select{font-size:16px;padding:6px;background:#0f1533;color:#e8ecf8;border:1px solid #39447c;border-radius:8px}
-input[type=range]{accent-color:#22d3ee}
-.muted{color:#9aa7c7}.live{font-size:19px;font-weight:700;min-height:30px;color:#fde047}
-canvas{width:100%;height:auto;background:#0d1330;border:1px solid #2c3768;border-radius:12px}
+select{font-size:16px;padding:6px;background:#081f14;color:#eaf6ee;border:1px solid #1f5c3d;border-radius:8px}
+input[type=range]{accent-color:#f59e0b}
+.muted{color:#93b3a0}.live{font-size:19px;font-weight:700;min-height:30px;color:#fde047}
+canvas{width:100%;height:auto;background:#071f13;border:1px solid #175134;border-radius:12px}
 .score{font-size:28px}.score span{font-size:56px;font-weight:900;color:#facc15;text-shadow:0 0 18px rgba(250,204,21,.45)}
 #noteResults{line-height:1.8}
 .nowinfo{font-size:30px;font-weight:800;min-height:40px;margin:2px 0;color:#fbbf24}
 .lyrics{font-size:22px;line-height:1.9;padding:8px 4px;overflow-x:auto;white-space:nowrap;min-width:0;max-width:100%}
-.lyrics span{display:inline-block;padding:2px 3px;border-radius:6px;color:#8b94b8;transition:all .1s}
+.lyrics span{display:inline-block;padding:2px 3px;border-radius:6px;color:#84a98f;transition:all .1s}
 .lyrics span.on{background:#fde047;color:#111;font-weight:800;transform:scale(1.22)}
-.controls{position:sticky;top:0;z-index:20;background:rgba(23,29,62,.96);padding:8px 0 4px;margin:0 -4px}
+.controls{position:sticky;top:0;z-index:20;background:rgba(9,36,22,.96);padding:8px 0 4px;margin:0 -4px}
 .controls p{margin:4px 0}
-.lyrics span.done{color:#38bdf8}
+.lyrics span.done{color:#34d399}
 .game{font-size:22px;font-weight:700;line-height:1.7}
-.bar{background:#0f1533;border:1px solid #2c3768;border-radius:999px;height:16px;overflow:hidden;margin:8px 0}
-#xpBar{background:linear-gradient(90deg,#f59e0b,#facc15,#22d3ee);height:100%;width:0%;transition:width .6s}
-textarea{width:100%;font-size:12px;padding:6px;box-sizing:border-box;background:#0f1533;color:#e8ecf8;border:1px solid #39447c;border-radius:8px}
+.bar{background:#081f14;border:1px solid #175134;border-radius:999px;height:16px;overflow:hidden;margin:8px 0}
+#xpBar{background:linear-gradient(90deg,#f59e0b,#facc15,#34d399);height:100%;width:0%;transition:width .6s}
+textarea{width:100%;font-size:12px;padding:6px;box-sizing:border-box;background:#081f14;color:#eaf6ee;border:1px solid #1f5c3d;border-radius:8px}
 details{margin-top:8px}
-summary{cursor:pointer;color:#38bdf8}
+summary{cursor:pointer;color:#34d399}
 /* 背の低い画面（Chromebook等）では詰めて、音程バーと歌詞を1画面に収める */
 @media (max-height:860px){
   header{padding:6px 12px 0}
@@ -50,10 +50,10 @@ summary{cursor:pointer;color:#38bdf8}
   button#singBtn{font-size:16px;padding:10px 20px}
   label{margin:6px 0}
 }
-#noteStrip{display:flex;gap:1px;height:20px;margin:6px 0 10px;overflow:hidden;border-radius:6px;background:#1e293b}
+#noteStrip{display:flex;gap:1px;height:20px;margin:6px 0 10px;overflow:hidden;border-radius:6px;background:#0a2e1c}
 #noteStrip i{display:block;height:100%}
 #missList{line-height:1.8}
 #missList li.miss{cursor:pointer;text-decoration:underline dotted}
-#allNotes summary{cursor:pointer;color:#93c5fd;margin-top:6px}
-.secbtn{font-size:1.15em;font-weight:700;padding:8px 18px;margin:2px;border-radius:999px;border:2px solid #5b7fff;background:#16213b;color:#dbeafe;cursor:pointer}
-.secbtn.on{background:#5b7fff;color:#fff;box-shadow:0 0 10px #5b7fff88}
+#allNotes summary{cursor:pointer;color:#a7f3d0;margin-top:6px}
+.secbtn{font-size:1.15em;font-weight:700;padding:8px 18px;margin:2px;border-radius:999px;border:2px solid #10b981;background:#0b2e1f;color:#d1fae5;cursor:pointer}
+.secbtn.on{background:#059669;color:#fff;box-shadow:0 0 10px #10b98188}
