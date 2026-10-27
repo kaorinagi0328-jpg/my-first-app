@@ -775,22 +775,45 @@ $("pasteLoad").addEventListener("click", () => {
 async function loadFromDrive(idOrUrl) {
   const m = String(idOrUrl).match(/[-\w]{25,}/);
   if (!m) throw new Error("リンクからファイルIDが取れませんでした");
-  // 新しいダウンロード用アドレスを使う（古い uc?export=download はウイルススキャン警告ページが返ることがある）
+  const id = m[0];
+  const isScore = (t) => t && t.includes("<score-partwise");
+  // 取り方を順番に試す: ①新しいダウンロード用アドレス ②古いアドレス ③警告ページ経由
   const urls = [
-    "https://drive.usercontent.google.com/download?id=" + m[0] + "&export=download&confirm=t",
-    "https://drive.google.com/uc?export=download&id=" + m[0],
+    "https://drive.usercontent.google.com/download?id=" + id + "&export=download&confirm=t",
+    "https://drive.google.com/uc?export=download&id=" + id,
   ];
-  let text = null; let lastStatus = 0;
+  let text = null; let lastStatus = 0; let netErr = false; let warningHtml = null;
   for (const u of urls) {
     try {
       const res = await fetch(u);
       lastStatus = res.status;
       if (!res.ok) continue;
       const t = await res.text();
-      if (t.includes("<score-partwise")) { text = t; break; }
-    } catch { /* 次のアドレスを試す */ }
+      if (isScore(t)) { text = t; break; }
+      if (t.includes("Virus scan warning") || t.includes("uc-download-link") || t.includes("uuid")) warningHtml = t;
+    } catch { netErr = true; }
   }
-  if (text == null) throw new Error("楽譜データが返ってきませんでした。共有設定が「リンクを知っている全員が閲覧可」になっているか確認してください" + (lastStatus ? " (HTTP " + lastStatus + ")" : ""));
+  // ③ウイルススキャン警告ページが返った場合は、その中のダウンロードリンク/uuidを使って取り直す
+  if (text == null && warningHtml) {
+    const candidates = [];
+    const linkM = warningHtml.match(/href="([^"]*drive\.usercontent\.google\.com[^"]*)"/) || warningHtml.match(/action="([^"]+)"/);
+    if (linkM) candidates.push(linkM[1].replace(/&amp;/g, "&"));
+    const uuidM = warningHtml.match(/name="uuid"[^>]*value="([^"]+)"/) || warningHtml.match(/[?&]uuid=([\w-]+)/);
+    if (uuidM) candidates.push("https://drive.usercontent.google.com/download?id=" + id + "&export=download&confirm=t&uuid=" + uuidM[1]);
+    for (const u of candidates) {
+      try {
+        const res = await fetch(u);
+        lastStatus = res.status;
+        if (!res.ok) continue;
+        const t = await res.text();
+        if (isScore(t)) { text = t; break; }
+      } catch { netErr = true; }
+    }
+  }
+  if (text == null) {
+    if (netErr && !lastStatus) throw new Error("ネットワークから取得できませんでした（学校のネットワーク制限の可能性があります）");
+    throw new Error("楽譜データが返ってきませんでした。共有設定が「リンクを知っている全員が閲覧可」になっているか確認してください" + (lastStatus ? " (HTTP " + lastStatus + ")" : ""));
+  }
   setSong(parseMusicXML(text)); rememberSong(text);
 }
 $("driveLoad").addEventListener("click", async () => {
