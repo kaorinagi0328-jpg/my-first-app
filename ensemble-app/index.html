@@ -66,6 +66,7 @@
         <option value="metro">メトロノームだけ（最上級）</option>
       </select>
     </label></p>
+    <p id="kbModeWrap" hidden><label><input id="kbMode" type="checkbox"> 🎹 鍵盤モード（画面の鍵盤をタッチして演奏・マイクは使いません）鍵盤楽器のパート向け</label></p>
     <div class="controls">
       <p>
         <button id="warmupBtn" type="button" disabled>🎯 音程合わせチャレンジ</button>
@@ -81,6 +82,10 @@
     <p id="livePitch" class="live"></p>
     <p id="nowInfo" class="nowinfo"></p>
     <canvas id="roll" width="900" height="230"></canvas>
+    <div id="kbWrap" hidden>
+      <div id="kbKeys"></div>
+      <p class="muted">金色に光った鍵盤が「次に押す音」。和音は光った鍵盤を全部押してね。お手本を聞いている間も、鍵盤を押して音を出せるよ。</p>
+    </div>
     <div id="lyricStrip" class="lyrics"></div>
     <p class="muted">青＝お手本の音（ドレミ付き）／ オレンジ＝打楽器の打つ場所 ／ 黄色い太線＝演奏した音の高さ ／ 採点後は緑＝合っている・赤＝ずれている音になります。打楽器パートは、楽器がなくても手拍子で練習できます</p>
   </section>

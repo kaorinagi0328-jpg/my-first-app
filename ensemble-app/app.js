@@ -107,6 +107,19 @@ function parseMusicXML(text) {
           const dur = (parseFloat(el.querySelector("duration")?.textContent || 0) / divisions);
           const isChord = !!el.querySelector("chord");
           const start = isChord ? notes.length ? notes[notes.length - 1].start : mCursor : mCursor;
+          if (isChord && !el.querySelector("rest")) {
+            // 和音の各音は「鍵盤モード」用に直前の音の chordMidis として残す
+            // （通常の再生・採点は従来どおり代表の1音だけを使う）
+            const cStep = el.querySelector("pitch > step")?.textContent;
+            const cAlt = parseFloat(el.querySelector("pitch > alter")?.textContent || 0);
+            const cOct = parseFloat(el.querySelector("pitch > octave")?.textContent || 4);
+            const lastN = notes[notes.length - 1];
+            if (cStep && STEP[cStep] !== undefined && lastN && !lastN.unpitched) {
+              const cm = (cOct + 1) * 12 + STEP[cStep] + cAlt;
+              lastN.chordMidis = lastN.chordMidis || [lastN.midi];
+              if (!lastN.chordMidis.includes(cm)) lastN.chordMidis.push(cm);
+            }
+          }
           if (!el.querySelector("rest") && !isChord) {
             const step = el.querySelector("pitch > step")?.textContent;
             const alter = parseFloat(el.querySelector("pitch > alter")?.textContent || 0);
@@ -248,7 +261,86 @@ function playTone(midi, at, dur, dest, gainVal = 0.18) {
 }
 function selectedPart() { return song.parts[Number($("partSelect").value || 0)]; }
 function selectedPartIsRhythm() { if (!song) return false; const p = selectedPart(); return p.notes.length > 0 && p.notes.every((n) => n.unpitched); }
-function updateBattleHead() { const bw = $("battleHead"); if (bw) bw.textContent = selectedPartIsRhythm() ? "🥁 リズムバトル（手拍子・打楽器）" : "🎤 演奏バトル（練習と採点）"; const wb = $("warmupBtn"); if (wb && song) wb.disabled = selectedPartIsRhythm(); }
+function updateBattleHead() { const bw = $("battleHead"); if (bw) bw.textContent = kbModeOn() ? "🎹 鍵盤バトル（タッチで演奏）" : selectedPartIsRhythm() ? "🥁 リズムバトル（手拍子・打楽器）" : "🎤 演奏バトル（練習と採点）"; const wb = $("warmupBtn"); if (wb && song) wb.disabled = selectedPartIsRhythm() || kbModeOn(); }
+// ---------- 鍵盤モード（画面の鍵盤をタッチして演奏・マイク不要） ----------
+let kbSession = null; // 演奏バトル中だけ {presses:[{beat,midi}], session}
+let kbLastHi = "";
+const KB_WHITE = new Set([0, 2, 4, 5, 7, 9, 11]);
+function kbModeOn() { const c = $("kbMode"); if (!c || !c.checked || !song) return false; const p = selectedPart(); return !!p && p.notes.some((n) => !n.unpitched); }
+function kbTargets(n) { return n.chordMidis && n.chordMidis.length ? n.chordMidis : [n.midi]; }
+function refreshKbUI() {
+  const w = $("kbModeWrap"); if (!w || !song) return;
+  const canKb = selectedPart().notes.some((n) => !n.unpitched);
+  w.hidden = !canKb;
+  if (!canKb && $("kbMode")) $("kbMode").checked = false;
+  buildKeyboard();
+  updateBattleHead();
+}
+function buildKeyboard() {
+  const wrap = $("kbWrap"), box = $("kbKeys"); if (!wrap || !box) return;
+  const show = !!song && kbModeOn();
+  wrap.hidden = !show;
+  if (!show) { kbLastHi = ""; return; }
+  const notes = segmentNotes();
+  let lo = Infinity, hi = -Infinity;
+  notes.forEach((n) => { if (!n.unpitched) kbTargets(n).forEach((m) => { if (m < lo) lo = m; if (m > hi) hi = m; }); });
+  if (!isFinite(lo)) { lo = 60; hi = 71; }
+  lo -= ((lo % 12) + 12) % 12;
+  hi += 11 - (((hi % 12) + 12) % 12);
+  if (hi - lo < 11) hi = lo + 11;
+  let whites = 0;
+  for (let m = lo; m <= hi; m++) if (KB_WHITE.has(((m % 12) + 12) % 12)) whites++;
+  box.innerHTML = "";
+  let wIdx = 0;
+  for (let m = lo; m <= hi; m++) {
+    const pc = ((m % 12) + 12) % 12;
+    const el = document.createElement("div");
+    if (KB_WHITE.has(pc)) {
+      el.className = "kbw"; el.style.left = (wIdx * 100 / whites) + "%"; el.style.width = (100 / whites) + "%"; wIdx++;
+      if (pc === 0) { const sp = document.createElement("span"); sp.textContent = "ド" + (Math.floor(m / 12) - 1); el.appendChild(sp); }
+    } else {
+      el.className = "kbb"; el.style.left = ((wIdx - 0.31) * 100 / whites) + "%"; el.style.width = (62 / whites) + "%";
+    }
+    el.dataset.midi = String(m);
+    el.addEventListener("pointerdown", (ev) => { ev.preventDefault(); pressKey(m, el); });
+    box.appendChild(el);
+  }
+  kbLastHi = "";
+  const first = notes.find((n) => !n.unpitched);
+  if (first) updateKeyboard(notes, first.start - 0.4);
+}
+function updateKeyboard(notes, beat) {
+  const box = $("kbKeys"); if (!box || $("kbWrap").hidden) return;
+  let cur = null, next = null;
+  for (const n of notes) {
+    if (n.unpitched) continue;
+    if (beat >= n.start && beat < n.start + n.dur) { cur = n; break; }
+    if (n.start > beat) { next = n; break; }
+  }
+  const set = new Map();
+  if (next && next.start - beat <= 2.0) kbTargets(next).forEach((m) => set.set(m, "next"));
+  if (cur) kbTargets(cur).forEach((m) => set.set(m, "now"));
+  const sig = [...set.entries()].map(([m, c]) => m + c).join(",");
+  if (sig === kbLastHi) return;
+  kbLastHi = sig;
+  box.querySelectorAll(".next,.now").forEach((el) => el.classList.remove("next", "now"));
+  set.forEach((c, m) => { const el = box.querySelector('[data-midi="' + m + '"]'); if (el) el.classList.add(c); });
+}
+function pressKey(midi, el) {
+  const ctx = ensureCtx(); if (ctx.state === "suspended") ctx.resume();
+  playTone(midi, ctx.currentTime, 0.4, null, 0.22);
+  if (kbSession && kbSession.session && playing === kbSession.session && mode === "sing") {
+    const s = kbSession.session;
+    const beat = s.conv.toBeat(ctx.currentTime - s.startAt);
+    kbSession.presses.push({ beat, midi });
+    const hit = segmentNotes().some((n) => !n.unpitched && Math.abs(beat - n.start) <= 0.35 && kbTargets(n).includes(midi));
+    el.classList.add(hit ? "hit" : "miss");
+    setTimeout(() => el.classList.remove("hit", "miss"), 220);
+  } else {
+    el.classList.add("hit");
+    setTimeout(() => el.classList.remove("hit"), 150);
+  }
+}
 function secPerBeat() { return 60 / (song.bpm * (Number($("tempo").value) / 100)); }
 // テンポ変更に対応した「拍⇔秒」の変換。segs = [{beat, sec, spb}]（区間ごとの1拍の秒数）
 function convFromSegs(segs) {
@@ -481,10 +573,27 @@ function extractOnsets(ampTrace) {
   }
   return onsets;
 }
-function scorePerformance(notes, rawTrace, onsets = []) {
+function scorePerformance(notes, rawTrace, onsets = [], presses = null) {
   const trace = smoothTrace(rawTrace);
   const usedOnsets = new Set();
+  const usedPresses = new Set();
   const scored = notes.map((n) => {
+    if (presses && !n.unpitched) {
+      // 鍵盤モード: 画面の鍵盤を押した記録（{beat, midi}）で判定する。和音は全部の音がそろって正解
+      const targets = n.chordMidis && n.chordMidis.length ? n.chordMidis : [n.midi];
+      let found = 0, worstErr = 0, worstAbs = 0;
+      targets.forEach((tm) => {
+        let bE = null, bA = Infinity, bI = -1;
+        presses.forEach((p, pi) => { if (usedPresses.has(pi) || p.midi !== tm) return; const d = p.beat - n.start; if (Math.abs(d) < bA) { bA = Math.abs(d); bE = d; bI = pi; } });
+        if (bE !== null && bA <= 0.35) { usedPresses.add(bI); found++; if (bA > worstAbs) { worstAbs = bA; worstErr = bE; } }
+      });
+      if (found === targets.length) {
+        const points = worstAbs <= 0.12 ? 100 : worstAbs <= 0.22 ? 70 : 40;
+        return { cents: null, timing: worstErr, ok: worstAbs <= 0.22, points, label: worstAbs <= 0.12 ? "◎ ぴったり" : worstAbs <= 0.22 ? "○ ほぼ合っている" : "△ " + (worstErr > 0 ? "遅れた" : "早かった") };
+      }
+      if (found > 0) return { cents: null, timing: worstErr, ok: false, points: 40, label: "△ 和音がたりない（" + found + "/" + targets.length + "音）" };
+      return { cents: null, timing: null, ok: false, points: 0, label: "× 押せなかった" };
+    }
     if (n.unpitched) {
       // リズム判定: 楽譜の打点に一番近いオンセットを探し、ズレ（拍）で採点する
       let best = null, bestAbs = Infinity;
@@ -507,6 +616,11 @@ function scorePerformance(notes, rawTrace, onsets = []) {
     return { cents, ok: a <= 100, points, label: a <= 50 ? "◎ ぴったり" : a <= 100 ? "○ ほぼ合っている" : "× " + (cents > 0 ? "高すぎ" : "低すぎ") };
   });
   const pitchTotal = Math.round(scored.reduce((s, r) => s + (r.points || 0), 0) / Math.max(1, scored.length));
+  if (presses) {
+    // 鍵盤モードには音程トレースがないので「のばす・きる」ボーナスは付けない
+    const rhythm = notes.length > 0 && notes.every((n) => n.unpitched);
+    return { scored, total: pitchTotal, pitchTotal, bonus: 0, holdScore: null, cutScore: null, holdN: 0, cutN: 0, rhythm, kb: true };
+  }
   // 「のばす・きる」評価: 長い音を最後まで保てたか、休みのところでピタッと止まれたか
   const foldCents = (c) => { if ($("octaveOk").checked) { while (c > 600) c -= 1200; while (c < -600) c += 1200; } return c; };
   const isNear = (p, midi) => Math.abs(foldCents((p.midiF - midi) * 100)) <= 200;
@@ -791,6 +905,7 @@ function setSong(s) {
   if (vw) vw.hidden = !s.parts.some((p) => p.notes.some((n) => n.lyric || (n.lyrics && Object.keys(n.lyrics).length)));
   updateBattleHead();
   drawRoll(selectedPart().notes, null, null);
+  refreshKbUI();
 }
 // 部分練習: 曲に区間（ア・イ・ウ…）の指定があればボタンを出す。選ぶと楽譜の並びでその区間だけを練習する
 function clearSectionBtns() { document.querySelectorAll("#sectionBtns .secbtn").forEach((b) => b.classList.remove("on")); }
@@ -808,7 +923,7 @@ function buildSectionBtns() {
   all.addEventListener("click", () => {
     if (!song) return; stopAll(); clearSectionBtns();
     practiceEnd = null; $("startMeasure").value = "1";
-    const notes = segmentNotes(); buildLyrics(notes); drawRoll(notes, null, null);
+    const notes = segmentNotes(); buildLyrics(notes); drawRoll(notes, null, null); buildKeyboard();
     $("status").textContent = "ぜんぶを通して練習します。お手本を聞くか、演奏バトル！を押してね";
   });
   box.appendChild(all);
@@ -822,23 +937,25 @@ function pickSection(sec, btn) {
   refreshStartMeasures();
   $("startMeasure").value = String(sec.from);
   practiceEnd = sec.to;
-  const notes = segmentNotes(); buildLyrics(notes); drawRoll(notes, null, null);
+  const notes = segmentNotes(); buildLyrics(notes); drawRoll(notes, null, null); buildKeyboard();
   $("status").textContent = "部分練習: " + sec.label + "（" + sec.from + "〜" + sec.to + "小節）。歌詞の番は「歌詞」の切り替えで選んでね。お手本を聞くか、演奏バトル！を押してね";
 }
-$("partSelect").addEventListener("change", () => { if (song) { practiceEnd = null; clearSectionBtns(); if ($("rangeSelect")) $("rangeSelect").value = "all"; $("startMeasure").value = "1"; refreshStartMeasures(); buildLyrics(selectedPart().notes); drawRoll(selectedPart().notes, null, null); updateBattleHead(); } });
+$("partSelect").addEventListener("change", () => { if (song) { practiceEnd = null; clearSectionBtns(); if ($("rangeSelect")) $("rangeSelect").value = "all"; $("startMeasure").value = "1"; refreshStartMeasures(); buildLyrics(selectedPart().notes); drawRoll(selectedPart().notes, null, null); updateBattleHead(); refreshKbUI(); } });
+$("kbMode").addEventListener("change", () => { stopAll(); refreshKbUI(); $("status").textContent = kbModeOn() ? "鍵盤モード：パートを選んで「お手本を聞く」か「演奏バトル！」を押してね（マイクは使いません）" : "鍵盤モードを切りました"; });
 $("rangeSelect").addEventListener("change", () => {
   if (!song) return;
   stopAll(); clearSectionBtns();
   const val = $("rangeSelect").value;
   if (val === "all") { practiceEnd = null; $("startMeasure").value = "1"; }
   else { const ab = val.split("-").map(Number); $("startMeasure").value = String(ab[0]); practiceEnd = ab[1]; }
-  const notes = segmentNotes(); buildLyrics(notes); drawRoll(notes, null, null);
+  const notes = segmentNotes(); buildLyrics(notes); drawRoll(notes, null, null); buildKeyboard();
   const label = $("rangeSelect").selectedOptions[0].textContent;
   $("status").textContent = "練習範囲: " + label + (practiceEnd ? "（演奏順の " + $("startMeasure").value + "〜" + practiceEnd + " 小節目）" : "（最初から最後まで）") + "。お手本を聞くか、演奏バトル！を押してね";
 });
 $("startMeasure").addEventListener("change", () => {
   // 「練習のはじめ」を手で変えたら、範囲指定は外して『その小節から最後まで』にする
   practiceEnd = null; clearSectionBtns(); const rs = $("rangeSelect"); if (rs) rs.value = "all";
+  buildKeyboard();
 });
 $("verseSelect").addEventListener("change", () => { if (lyricNotes.length) buildLyrics(lyricNotes); });
 $("orderMode").addEventListener("change", () => {
@@ -850,7 +967,7 @@ $("orderMode").addEventListener("change", () => {
   practiceEnd = null; if ($("rangeSelect")) $("rangeSelect").value = "all";
   const rw = $("rangeWrap"); if (rw) rw.hidden = !on;
   $("startMeasure").value = "1";
-  refreshStartMeasures(); buildLyrics(selectedPart().notes); drawRoll(selectedPart().notes, null, null);
+  refreshStartMeasures(); buildLyrics(selectedPart().notes); drawRoll(selectedPart().notes, null, null); buildKeyboard();
   $("status").textContent = on ? "演奏順で再生します（繰り返し・コーダあり）" : "楽譜の並びどおり（繰り返しなし）で再生します";
 });
 $("tempo").addEventListener("input", () => { $("tempoVal").textContent = $("tempo").value; });
@@ -985,27 +1102,39 @@ function startModel() {
     if (beat >= 0 && $("status").textContent.startsWith("カウントイン")) $("status").textContent = "お手本を再生中…";
     updateCurrent(notes, beat);
     drawRoll(notes, null, Math.max(0, beat), beat < 0 ? String(Math.ceil(-beat)) : null, pageView(beat, notes));
+    updateKeyboard(notes, beat);
     if (beat <= Math.max(...notes.map((n) => n.start + n.dur))) requestAnimationFrame(tick);
   })();
 }
 $("playModel").addEventListener("click", startModel);
 async function startSing() {
   stopAll(); mode = "sing"; const notes = segmentNotes(); buildLyrics(notes);
-  let stream;
-  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-  catch { $("status").textContent = "マイクが使えませんでした。ブラウザのマイク許可を確認してください"; return; }
+  const kb = kbModeOn();
+  let stream = null, analyser = null;
+  const buf = new Float32Array(2048);
+  if (!kb) {
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch { $("status").textContent = "マイクが使えませんでした。ブラウザのマイク許可を確認してください"; return; }
+  }
   const ctx = ensureCtx();
-  const src = ctx.createMediaStreamSource(stream);
-  const analyser = ctx.createAnalyser(); analyser.fftSize = 2048; src.connect(analyser);
-  const buf = new Float32Array(analyser.fftSize);
+  if (stream) {
+    const src = ctx.createMediaStreamSource(stream);
+    analyser = ctx.createAnalyser(); analyser.fftSize = 2048; src.connect(analyser);
+  }
+  const presses = [];
   const s = scheduleModel(guideNotesFor(notes), finish, notes, { metro: guideMode() === "metro" });
-  $("status").textContent = (s.countIn ? "カウントイン… 大きな数字が0になったら演奏を始めてください" : "お手本に合わせて演奏してください") + stageNote() + (selectedPartIsRhythm() ? "（打楽器パート：オレンジの場所で、手拍子や楽器で打ってね）" : "");
+  if (kb) {
+    kbSession = { presses, session: s };
+    $("status").textContent = (s.countIn ? "カウントイン… 大きな数字が0になったら、光った鍵盤を押してね" : "光った鍵盤をタイミングよく押してね") + "（鍵盤モード：マイクは使いません）";
+  } else {
+    $("status").textContent = (s.countIn ? "カウントイン… 大きな数字が0になったら演奏を始めてください" : "お手本に合わせて演奏してください") + stageNote() + (selectedPartIsRhythm() ? "（打楽器パート：オレンジの場所で、手拍子や楽器で打ってね）" : "");
+  }
   playing = s; $("stopBtn").disabled = false; { const pb = $("pauseBtn"); pb.disabled = false; pb.textContent = "⏸ 一時停止"; }
   const trace = []; const ampTrace = []; let done = false; const recent = [];
   // 聞き直し用に歌声を録音する（端末内のみ。外部送信はしない）
   let recorder = null; const recChunks = []; const recT0 = ctx.currentTime; let recDiscard = false;
   const recOffset = s.startAt - recT0; // 録音の何秒目が曲の0拍目か
-  if (window.MediaRecorder) {
+  if (stream && window.MediaRecorder) {
     const mime = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/ogg"].find((m) => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } });
     try {
       recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
@@ -1031,15 +1160,16 @@ async function startSing() {
   }
   function finish() {
     if (done) return; done = true;
-    stream.getTracks().forEach((t) => t.stop()); $("stopBtn").disabled = true; resetPauseBtn();
-    const result = scorePerformance(notes, trace, extractOnsets(ampTrace));
+    if (stream) stream.getTracks().forEach((t) => t.stop()); $("stopBtn").disabled = true; resetPauseBtn();
+    const result = kb ? scorePerformance(notes, [], [], presses) : scorePerformance(notes, trace, extractOnsets(ampTrace));
+    if (kb) kbSession = null;
     finalizeRecording(true, result.scored);
     drawRoll(notes, { trace, scored: result.scored }, null);
     $("scoreNum").textContent = result.total;
     // 結果はまず要約で見せる: 判定の個数 + 色の帯（1音=1ブロック） + ずれた音だけのリスト。全音リストは折りたたみに
     const cnt = { p: 0, o: 0, x: 0, none: 0 };
     result.scored.forEach((r) => { if (r.points >= 100) cnt.p++; else if (r.ok) cnt.o++; else if (r.cents == null && r.timing == null) cnt.none++; else cnt.x++; });
-    $("noteSummary").textContent = "◎ ぴったり " + cnt.p + "個　○ ほぼ合っている " + cnt.o + "個　× ずれた " + cnt.x + "個" + (cnt.none ? (result.rhythm ? "　打てなかった " : "　音が取れなかった ") + cnt.none + "個" : "");
+    $("noteSummary").textContent = "◎ ぴったり " + cnt.p + "個　○ ほぼ合っている " + cnt.o + "個　× ずれた " + cnt.x + "個" + (cnt.none ? (result.rhythm ? "　打てなかった " : result.kb ? "　押せなかった " : "　音が取れなかった ") + cnt.none + "個" : "");
     const strip = $("noteStrip"); strip.innerHTML = "";
     result.scored.forEach((r, i) => {
       const b = document.createElement("i");
@@ -1089,7 +1219,7 @@ async function startSing() {
     const good = [], tips = [];
     const perfectN = result.scored.filter((r) => r.points === 100).length;
     const missedN = result.scored.filter((r) => r.cents == null && r.timing == null).length;
-    if (perfectN >= Math.max(3, notes.length / 3)) good.push("音程ぴったり（◎）が " + perfectN + " 個もあったよ");
+    if (perfectN >= Math.max(3, notes.length / 3)) good.push((result.kb ? "タイミングぴったり（◎）が " : "音程ぴったり（◎）が ") + perfectN + " 個もあったよ");
     if (maxCombo >= 8) good.push(maxCombo + " コンボ続いたのがすごい");
     if (result.holdScore != null && result.holdScore >= 0.8) good.push("長く伸ばす音を、最後までしっかり保てていたよ");
     if (result.cutScore != null && result.cutScore >= 0.8) good.push("休むところでピタッと止められていたよ");
@@ -1101,11 +1231,11 @@ async function startSing() {
     let worstI = -1, worstA = 100;
     result.scored.forEach((r, i) => { if (r.cents != null && Math.abs(r.cents) > worstA) { worstA = Math.abs(r.cents); worstI = i; } });
     if (worstI >= 0) tips.push((worstI + 1) + "音目（♪" + NOTE_NAMES[((notes[worstI].midi % 12) + 12) % 12] + "）が一番ずれていたよ（" + (result.scored[worstI].cents > 0 ? "高すぎ" : "低すぎ") + "）。そこを何回か練習しよう");
-    if (result.rhythm) {
+    if (result.rhythm || result.kb) {
       let wI = -1, wA = 0;
       result.scored.forEach((r, i) => { if (r.timing != null && Math.abs(r.timing) > wA) { wA = Math.abs(r.timing); wI = i; } });
       if (wI >= 0 && wA > 0.22) tips.push((wI + 1) + "音目が一番ずれたよ（" + (result.scored[wI].timing > 0 ? "遅れがち" : "早まち") + "）。メトロノームをよく聞いて合わせてみよう");
-      if (missedN > 0) tips.push("打てなかった音が " + missedN + " 個あったよ。ガイドの音を聞いて、手拍子で合わせてみよう");
+      if (missedN > 0) tips.push(result.kb ? "押せなかった音が " + missedN + " 個あったよ。金色に光る鍵盤をよく見て、タイミングを合わせて押してみよう" : "打てなかった音が " + missedN + " 個あったよ。ガイドの音を聞いて、手拍子で合わせてみよう");
     } else if (missedN > 0) tips.push("音が取れなかった音が " + missedN + " 個あったよ。もう少しはっきり演奏してみよう");
     if (result.holdScore != null && result.holdScore < 0.5) tips.push("長く伸ばす音が途中で切れがち。息をたっぷり吸って、音符の最後まで伸ばそう");
     if (result.cutScore != null && result.cutScore < 0.5) tips.push("休むところで声が残りがち。切れ目でピタッと止めるのを意識しよう");
@@ -1131,7 +1261,7 @@ async function startSing() {
   s.stop = () => {
     s.stopOrig();
     if (s.noScore) { // 最初からやり直すときは採点せずにマイクだけ止める
-      if (!done) { done = true; recDiscard = true; finalizeRecording(false); stream.getTracks().forEach((t) => t.stop()); }
+      if (!done) { done = true; recDiscard = true; finalizeRecording(false); if (stream) stream.getTracks().forEach((t) => t.stop()); kbSession = null; }
       return;
     }
     finish();
@@ -1139,6 +1269,16 @@ async function startSing() {
   (function tick() {
     if (done || playing !== s) return;
     if (ctx.state === "suspended") { requestAnimationFrame(tick); return; } // 一時停止中は採点データを集めない
+    if (kb) {
+      const kBeat = s.conv.toBeat(ctx.currentTime - s.startAt);
+      if (kBeat < 0) $("livePitch").textContent = "あと " + Math.ceil(-kBeat) + " 拍でスタート";
+      else if ($("status").textContent.startsWith("カウントイン")) $("status").textContent = "光った鍵盤を押してね！";
+      updateCurrent(notes, kBeat);
+      drawRoll(notes, null, Math.max(0, kBeat), kBeat < 0 ? String(Math.ceil(-kBeat)) : null, pageView(kBeat, notes));
+      updateKeyboard(notes, kBeat);
+      requestAnimationFrame(tick);
+      return;
+    }
     analyser.getFloatTimeDomainData(buf);
     const f = detectPitch(buf, ctx.sampleRate);
     const beat = s.conv.toBeat(ctx.currentTime - s.startAt);

@@ -57,3 +57,14 @@ summary{cursor:pointer;color:#34d399}
 #allNotes summary{cursor:pointer;color:#a7f3d0;margin-top:6px}
 .secbtn{font-size:1.15em;font-weight:700;padding:8px 18px;margin:2px;border-radius:999px;border:2px solid #10b981;background:#0b2e1f;color:#d1fae5;cursor:pointer}
 .secbtn.on{background:#059669;color:#fff;box-shadow:0 0 10px #10b98188}
+/* 鍵盤モード */
+#kbKeys{position:relative;height:118px;background:#081f14;border:1px solid #1f5c3d;border-radius:10px;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;margin-top:6px}
+#kbKeys .kbw{position:absolute;top:0;height:100%;background:linear-gradient(180deg,#e9e4d2,#fbf8ec);border-right:1px solid #9aa48f;border-bottom-left-radius:5px;border-bottom-right-radius:5px;box-sizing:border-box;cursor:pointer}
+#kbKeys .kbw span{position:absolute;bottom:4px;left:0;right:0;text-align:center;font-size:11px;color:#7c6a2f;font-weight:700;pointer-events:none}
+#kbKeys .kbb{position:absolute;top:0;height:58%;background:linear-gradient(180deg,#2a3a30,#060d09);border-bottom-left-radius:4px;border-bottom-right-radius:4px;z-index:2;cursor:pointer;box-shadow:0 3px 5px rgba(0,0,0,.5)}
+#kbKeys .kbw.next{background:linear-gradient(180deg,#fcd34d,#fde68a)}
+#kbKeys .kbb.next{background:linear-gradient(180deg,#d97706,#b45309)}
+#kbKeys .kbw.now{background:linear-gradient(180deg,#f59e0b,#fbbf24);box-shadow:inset 0 0 0 2px #fff7d6}
+#kbKeys .kbb.now{background:linear-gradient(180deg,#f59e0b,#d97706);box-shadow:inset 0 0 0 2px #fff7d6}
+#kbKeys .hit{background:#34d399 !important}
+#kbKeys .miss{background:#f87171 !important}
