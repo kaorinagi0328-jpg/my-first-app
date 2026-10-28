@@ -285,9 +285,10 @@ function buildKeyboard() {
   let lo = Infinity, hi = -Infinity;
   notes.forEach((n) => { if (!n.unpitched) kbTargets(n).forEach((m) => { if (m < lo) lo = m; if (m > hi) hi = m; }); });
   if (!isFinite(lo)) { lo = 60; hi = 71; }
-  lo -= ((lo % 12) + 12) % 12;
-  hi += 11 - (((hi % 12) + 12) % 12);
-  if (hi - lo < 11) hi = lo + 11;
+  lo -= ((lo % 12) + 12) % 12; // 左端はド（C）にそろえる
+  // 右端は一番高い音まで（はみ出す黒鍵だけ1つ先まで）。低音パートでも鍵盤が広がりすぎないように
+  if (!KB_WHITE.has(((hi % 12) + 12) % 12)) hi++;
+  if (hi - lo < 12) { hi = lo + 12; if (!KB_WHITE.has(((hi % 12) + 12) % 12)) hi++; }
   let whites = 0;
   for (let m = lo; m <= hi; m++) if (KB_WHITE.has(((m % 12) + 12) % 12)) whites++;
   box.innerHTML = "";
