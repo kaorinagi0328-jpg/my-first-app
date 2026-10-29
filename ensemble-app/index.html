@@ -66,7 +66,16 @@
         <option value="metro">メトロノームだけ（最上級）</option>
       </select>
     </label></p>
-    <p id="kbModeWrap" hidden><label><input id="kbMode" type="checkbox"> 🎹 鍵盤モード（画面の鍵盤をタッチして演奏・マイクは使いません）低音楽器など、音程のあるパート全部で使えます</label></p>
+    <div id="inputPick">
+      <p class="muted" style="margin:4px 0 2px">バトルの入力方法（楽器がなくても、画面タッチで練習できます）</p>
+      <p style="margin:2px 0">
+        <button id="inMicBtn" type="button" class="inbtn sel">🎤 マイクで演奏</button>
+        <button id="inKbBtn" type="button" class="inbtn" hidden>🎹 画面の鍵盤をタッチ</button>
+        <button id="inPadBtn" type="button" class="inbtn" hidden>👆 画面をタップ（打楽器）</button>
+      </p>
+      <input id="kbMode" type="checkbox" hidden>
+      <input id="padMode" type="checkbox" hidden>
+    </div>
     <div class="controls">
       <p>
         <button id="warmupBtn" type="button" disabled>🎯 音程合わせチャレンジ</button>
@@ -84,7 +93,11 @@
     <canvas id="roll" width="900" height="230"></canvas>
     <div id="kbWrap" hidden>
       <div id="kbKeys"></div>
-      <p class="muted">金色に光った鍵盤が「次に押す音」。和音は光った鍵盤を全部押してね。お手本を聞いている間も、鍵盤を押して音を出せるよ。</p>
+      <p class="muted">金色に光った鍵盤が「次に押す音」。和音は光った鍵盤を全部押してね。パソコンでは、鍵盤に書かれたアルファベットのキーでも弾けるよ。お手本を聞いている間も、鍵盤を押して音を出せるよ。</p>
+    </div>
+    <div id="padWrap" hidden>
+      <div id="padBtn">🥁 ここをタップ！</div>
+      <p class="muted">オレンジの音のタイミングで、ここをタップ（パソコンはスペースキーでもOK）。マイクは使いません。</p>
     </div>
     <div id="lyricStrip" class="lyrics"></div>
     <p class="muted">青＝お手本の音（ドレミ付き）／ オレンジ＝打楽器の打つ場所 ／ 黄色い太線＝演奏した音の高さ ／ 採点後は緑＝合っている・赤＝ずれている音になります。打楽器パートは、楽器がなくても手拍子で練習できます</p>

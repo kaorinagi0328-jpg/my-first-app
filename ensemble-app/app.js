@@ -261,25 +261,43 @@ function playTone(midi, at, dur, dest, gainVal = 0.18) {
 }
 function selectedPart() { return song.parts[Number($("partSelect").value || 0)]; }
 function selectedPartIsRhythm() { if (!song) return false; const p = selectedPart(); return p.notes.length > 0 && p.notes.every((n) => n.unpitched); }
-function updateBattleHead() { const bw = $("battleHead"); if (bw) bw.textContent = kbModeOn() ? "🎹 鍵盤バトル（タッチで演奏）" : selectedPartIsRhythm() ? "🥁 リズムバトル（手拍子・打楽器）" : "🎤 演奏バトル（練習と採点）"; const wb = $("warmupBtn"); if (wb && song) wb.disabled = selectedPartIsRhythm() || kbModeOn(); }
+function updateBattleHead() { const bw = $("battleHead"); if (bw) bw.textContent = kbModeOn() ? "🎹 鍵盤バトル（タッチで演奏）" : padModeOn() ? "🥁 リズムバトル（画面タップ）" : selectedPartIsRhythm() ? "🥁 リズムバトル（手拍子・打楽器）" : "🎤 演奏バトル（練習と採点）"; const wb = $("warmupBtn"); if (wb && song) wb.disabled = selectedPartIsRhythm() || kbModeOn(); }
 // ---------- 鍵盤モード（画面の鍵盤をタッチして演奏・マイク不要） ----------
 let kbSession = null; // 演奏バトル中だけ {presses:[{beat,midi}], session}
+let kbKeyMap = new Map(); // パソコンのキー（a,w,s,e...）→ midi。buildKeyboard が表示中の鍵盤に合わせて作る
 let kbLastHi = "";
 const KB_WHITE = new Set([0, 2, 4, 5, 7, 9, 11]);
 function kbModeOn() { const c = $("kbMode"); if (!c || !c.checked || !song) return false; const p = selectedPart(); return !!p && p.notes.some((n) => !n.unpitched); }
 function kbTargets(n) { return n.chordMidis && n.chordMidis.length ? n.chordMidis : [n.midi]; }
+function padModeOn() { const c = $("padMode"); if (!c || !c.checked || !song) return false; return selectedPartIsRhythm(); }
+let padSession = null; // リズムバトル（画面タップ）中だけ {taps:[beat...], session}
+function syncInputBtns() {
+  const kb = kbModeOn(), pad = padModeOn();
+  const m = $("inMicBtn"), k = $("inKbBtn"), p = $("inPadBtn");
+  if (m) m.classList.toggle("sel", !kb && !pad);
+  if (k) k.classList.toggle("sel", kb);
+  if (p) p.classList.toggle("sel", pad);
+}
+function refreshPadUI() { const w = $("padWrap"); if (w) w.hidden = !padModeOn(); }
 function refreshKbUI() {
-  const w = $("kbModeWrap"); if (!w || !song) return;
+  if (!song) return;
   const canKb = selectedPart().notes.some((n) => !n.unpitched);
-  w.hidden = !canKb;
+  const rhythm = selectedPartIsRhythm();
   if (!canKb && $("kbMode")) $("kbMode").checked = false;
+  if (!rhythm && $("padMode")) $("padMode").checked = false;
+  const k = $("inKbBtn"), p = $("inPadBtn");
+  if (k) k.hidden = !canKb;
+  if (p) p.hidden = !rhythm;
+  syncInputBtns();
   buildKeyboard();
+  refreshPadUI();
   updateBattleHead();
 }
 function buildKeyboard() {
   const wrap = $("kbWrap"), box = $("kbKeys"); if (!wrap || !box) return;
   const show = !!song && kbModeOn();
   wrap.hidden = !show;
+  kbKeyMap = new Map();
   if (!show) { kbLastHi = ""; return; }
   const notes = segmentNotes();
   let lo = Infinity, hi = -Infinity;
@@ -296,11 +314,18 @@ function buildKeyboard() {
   for (let m = lo; m <= hi; m++) {
     const pc = ((m % 12) + 12) % 12;
     const el = document.createElement("div");
+    let letter = null;
     if (KB_WHITE.has(pc)) {
-      el.className = "kbw"; el.style.left = (wIdx * 100 / whites) + "%"; el.style.width = (100 / whites) + "%"; wIdx++;
+      el.className = "kbw"; el.style.left = (wIdx * 100 / whites) + "%"; el.style.width = (100 / whites) + "%";
+      letter = "asdfghjkl;"[wIdx] || null; wIdx++;
       if (pc === 0) { const sp = document.createElement("span"); sp.textContent = "ド" + (Math.floor(m / 12) - 1); el.appendChild(sp); }
     } else {
       el.className = "kbb"; el.style.left = ((wIdx - 0.31) * 100 / whites) + "%"; el.style.width = (62 / whites) + "%";
+      letter = ({ 0: "w", 1: "e", 3: "t", 4: "y", 5: "u", 7: "o", 8: "p" })[wIdx - 1] || null;
+    }
+    if (letter) {
+      kbKeyMap.set(letter, m);
+      const lb = document.createElement("span"); lb.className = "kbl"; lb.textContent = letter.toUpperCase(); el.appendChild(lb);
     }
     el.dataset.midi = String(m);
     el.addEventListener("pointerdown", (ev) => { ev.preventDefault(); pressKey(m, el); });
@@ -335,11 +360,28 @@ function pressKey(midi, el) {
     const beat = s.conv.toBeat(ctx.currentTime - s.startAt);
     kbSession.presses.push({ beat, midi });
     const hit = segmentNotes().some((n) => !n.unpitched && Math.abs(beat - n.start) <= 0.35 && kbTargets(n).includes(midi));
-    el.classList.add(hit ? "hit" : "miss");
-    setTimeout(() => el.classList.remove("hit", "miss"), 220);
-  } else {
+    if (el) { el.classList.add(hit ? "hit" : "miss"); setTimeout(() => el.classList.remove("hit", "miss"), 220); }
+  } else if (el) {
     el.classList.add("hit");
     setTimeout(() => el.classList.remove("hit"), 150);
+  }
+}
+// ---------- 打楽器パッド（画面タップ／スペースキー・マイク不要） ----------
+function playTapSound() {
+  const ctx = ensureCtx(); if (ctx.state === "suspended") ctx.resume();
+  const t = ctx.currentTime;
+  const osc = ctx.createOscillator(), g = ctx.createGain();
+  osc.type = "sine"; osc.frequency.setValueAtTime(170, t); osc.frequency.exponentialRampToValueAtTime(70, t + 0.09);
+  g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+  osc.connect(g).connect(ctx.destination); osc.start(t); osc.stop(t + 0.11);
+}
+function padTap() {
+  playTapSound();
+  const el = $("padBtn");
+  if (el) { el.classList.add("hit"); setTimeout(() => el.classList.remove("hit"), 130); }
+  if (padSession && padSession.session && playing === padSession.session && mode === "sing") {
+    const s = padSession.session;
+    padSession.taps.push(s.conv.toBeat(ensureCtx().currentTime - s.startAt));
   }
 }
 function secPerBeat() { return 60 / (song.bpm * (Number($("tempo").value) / 100)); }
@@ -946,6 +988,26 @@ function pickSection(sec, btn) {
 }
 $("partSelect").addEventListener("change", () => { if (song) { practiceEnd = null; clearSectionBtns(); if ($("rangeSelect")) $("rangeSelect").value = "all"; $("startMeasure").value = "1"; refreshStartMeasures(); buildLyrics(selectedPart().notes); drawRoll(selectedPart().notes, null, null); updateBattleHead(); refreshKbUI(); } });
 $("kbMode").addEventListener("change", () => { stopAll(); refreshKbUI(); $("status").textContent = kbModeOn() ? "鍵盤モード：パートを選んで「お手本を聞く」か「演奏バトル！」を押してね（マイクは使いません）" : "鍵盤モードを切りました"; });
+$("inMicBtn").addEventListener("click", () => { stopAll(); $("kbMode").checked = false; $("padMode").checked = false; refreshKbUI(); $("status").textContent = "マイクで演奏：パートを選んで「演奏バトル！」を押してね（打楽器パートは手拍子でもOK）"; });
+$("inKbBtn").addEventListener("click", () => { stopAll(); $("kbMode").checked = true; $("padMode").checked = false; refreshKbUI(); $("status").textContent = "画面の鍵盤で演奏：光った鍵盤をタッチ（パソコンはアルファベットのキーでもOK）。マイクは使いません"; });
+$("inPadBtn").addEventListener("click", () => { stopAll(); $("padMode").checked = true; $("kbMode").checked = false; refreshKbUI(); $("status").textContent = "画面タップで演奏：オレンジのタイミングで大きなボタンをタップ（パソコンはスペースキーでもOK）。マイクは使いません"; });
+$("padBtn").addEventListener("pointerdown", (ev) => { ev.preventDefault(); padTap(); });
+document.addEventListener("keydown", (e) => {
+  if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+  const t = e.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA")) return;
+  const padW = $("padWrap");
+  if (padW && !padW.hidden && (e.code === "Space" || e.code === "Enter")) { e.preventDefault(); padTap(); return; }
+  const kbW = $("kbWrap");
+  if (kbW && !kbW.hidden && kbKeyMap.size) {
+    const midi = kbKeyMap.get(e.key.toLowerCase());
+    if (midi != null) {
+      e.preventDefault();
+      const box = $("kbKeys");
+      pressKey(midi, box ? box.querySelector('[data-midi="' + midi + '"]') : null);
+    }
+  }
+});
 $("rangeSelect").addEventListener("change", () => {
   if (!song) return;
   stopAll(); clearSectionBtns();
@@ -1114,9 +1176,10 @@ $("playModel").addEventListener("click", startModel);
 async function startSing() {
   stopAll(); mode = "sing"; const notes = segmentNotes(); buildLyrics(notes);
   const kb = kbModeOn();
+  const pad = padModeOn();
   let stream = null, analyser = null;
   const buf = new Float32Array(2048);
-  if (!kb) {
+  if (!kb && !pad) {
     try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
     catch { $("status").textContent = "マイクが使えませんでした。ブラウザのマイク許可を確認してください"; return; }
   }
@@ -1126,10 +1189,15 @@ async function startSing() {
     analyser = ctx.createAnalyser(); analyser.fftSize = 2048; src.connect(analyser);
   }
   const presses = [];
+  const padTaps = [];
   const s = scheduleModel(guideNotesFor(notes), finish, notes, { metro: guideMode() === "metro" });
   if (kb) {
+    buildKeyboard();
     kbSession = { presses, session: s };
     $("status").textContent = (s.countIn ? "カウントイン… 大きな数字が0になったら、光った鍵盤を押してね" : "光った鍵盤をタイミングよく押してね") + "（鍵盤モード：マイクは使いません）";
+  } else if (pad) {
+    padSession = { taps: padTaps, session: s };
+    $("status").textContent = (s.countIn ? "カウントイン… 大きな数字が0になったら、オレンジのタイミングで画面をタップしてね" : "オレンジのタイミングで画面をタップしてね") + "（タップモード：マイクは使いません）";
   } else {
     $("status").textContent = (s.countIn ? "カウントイン… 大きな数字が0になったら演奏を始めてください" : "お手本に合わせて演奏してください") + stageNote() + (selectedPartIsRhythm() ? "（打楽器パート：オレンジの場所で、手拍子や楽器で打ってね）" : "");
   }
@@ -1165,8 +1233,9 @@ async function startSing() {
   function finish() {
     if (done) return; done = true;
     if (stream) stream.getTracks().forEach((t) => t.stop()); $("stopBtn").disabled = true; resetPauseBtn();
-    const result = kb ? scorePerformance(notes, [], [], presses) : scorePerformance(notes, trace, extractOnsets(ampTrace));
+    const result = kb ? scorePerformance(notes, [], [], presses) : pad ? scorePerformance(notes, [], padTaps) : scorePerformance(notes, trace, extractOnsets(ampTrace));
     if (kb) kbSession = null;
+    if (pad) padSession = null;
     finalizeRecording(true, result.scored);
     drawRoll(notes, { trace, scored: result.scored }, null);
     $("scoreNum").textContent = result.total;
