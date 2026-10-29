@@ -464,7 +464,7 @@ function drawRoll(notes, sung, playheadBeat, overlayText, view) {
   const W = c.width, H = c.height; ctx.clearRect(0, 0, W, H);
   if (!notes.length) return;
   const totalBeats = Math.max(...notes.map((n) => n.start + n.dur));
-  const midis = notes.map((n) => n.midi);
+  const midis = notes.flatMap((n) => kbTargets(n));
   const lo = Math.min(...midis) - 3, hi = Math.max(...midis) + 3;
   const PAD_L = 52, PAD_R = 10, PAD_T = 10, PAD_B = 10;
   // 再生中は4小節分だけを拡大表示して現在位置を追う (view={start,span})
@@ -484,33 +484,36 @@ function drawRoll(notes, sung, playheadBeat, overlayText, view) {
   }
   ctx.strokeStyle = "rgba(255,255,255,.14)";
   for (let b = 0; b <= totalBeats; b++) { ctx.beginPath(); ctx.moveTo(x(b), PAD_T); ctx.lineTo(x(b), H - PAD_B); ctx.stroke(); }
-  // お手本の音符: 角丸ブロック + ドレミ表記
-  const drawNote = (n, fill) => {
+  // お手本の音符: 角丸ブロック + ドレミ表記。和音は chordMidis の全音を描く（2026-10-29: 以前は代表音だけだった）
+  const drawNote = (n, fill, midi) => {
+    const m = midi == null ? n.midi : midi;
     const nx = x(n.start) + 1, nw = Math.max(6, x(n.start + n.dur) - x(n.start) - 2);
-    const ny = y(n.midi + 0.42), nh = y(n.midi - 0.42) - ny;
+    const ny = y(m + 0.42), nh = y(m - 0.42) - ny;
     roundRectPath(ctx, nx, ny, nw, nh, 5); ctx.fillStyle = fill; ctx.fill();
     ctx.strokeStyle = "rgba(255,255,255,.55)"; ctx.lineWidth = 1; ctx.stroke();
     if (nw >= 26) {
       ctx.fillStyle = "#fff"; ctx.font = "bold 12px system-ui, sans-serif"; ctx.textAlign = "center";
-      ctx.fillText(n.unpitched ? "打" : NOTE_NAMES[((n.midi % 12) + 12) % 12], nx + nw / 2, ny + nh / 2 + 0.5);
+      ctx.fillText(n.unpitched ? "打" : NOTE_NAMES[((m % 12) + 12) % 12], nx + nw / 2, ny + nh / 2 + 0.5);
       ctx.textAlign = "right"; ctx.font = "12px system-ui, sans-serif";
     }
   };
-  notes.forEach((n) => drawNote(n, n.unpitched ? "#fb923c" : "#10b981"));
+  notes.forEach((n) => kbTargets(n).forEach((m) => drawNote(n, n.unpitched ? "#fb923c" : "#10b981", m)));
   if (sung && sung.scored) {
-    sung.scored.forEach((s, i) => drawNote(notes[i], s.ok ? "rgba(34,197,94,.88)" : "rgba(239,68,68,.88)"));
+    sung.scored.forEach((s, i) => kbTargets(notes[i]).forEach((m) => drawNote(notes[i], s.ok ? "rgba(34,197,94,.88)" : "rgba(239,68,68,.88)", m)));
   }
   // いま鳴っている音は大きく明るく描き直す
   if (curIdx >= 0) {
     const n = notes[curIdx];
     const nx = x(n.start) + 1, nw = Math.max(10, x(n.start + n.dur) - x(n.start) - 2);
-    const ny = y(n.midi + 0.75), nh = y(n.midi - 0.75) - ny;
-    ctx.save(); ctx.shadowColor = "#fde047"; ctx.shadowBlur = 18;
-    roundRectPath(ctx, nx, ny, nw, nh, 7); ctx.fillStyle = "#facc15"; ctx.fill(); ctx.restore();
-    ctx.strokeStyle = "#fff"; ctx.lineWidth = 2.5; roundRectPath(ctx, nx, ny, nw, nh, 7); ctx.stroke();
-    ctx.fillStyle = "#111"; ctx.font = "bold 15px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(NOTE_NAMES[((n.midi % 12) + 12) % 12], nx + nw / 2, ny + nh / 2 + 0.5);
-    ctx.textAlign = "right"; ctx.font = "12px system-ui, sans-serif";
+    kbTargets(n).forEach((m) => {
+      const ny = y(m + 0.75), nh = y(m - 0.75) - ny;
+      ctx.save(); ctx.shadowColor = "#fde047"; ctx.shadowBlur = 18;
+      roundRectPath(ctx, nx, ny, nw, nh, 7); ctx.fillStyle = "#facc15"; ctx.fill(); ctx.restore();
+      ctx.strokeStyle = "#fff"; ctx.lineWidth = 2.5; roundRectPath(ctx, nx, ny, nw, nh, 7); ctx.stroke();
+      ctx.fillStyle = "#111"; ctx.font = "bold 15px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(NOTE_NAMES[((m % 12) + 12) % 12], nx + nw / 2, ny + nh / 2 + 0.5);
+      ctx.textAlign = "right"; ctx.font = "12px system-ui, sans-serif";
+    });
   }
   // 歌った音: なめらかにした太い線。無音や大きな跳躍では線を切る
   if (sung && sung.trace && sung.trace.length) {
