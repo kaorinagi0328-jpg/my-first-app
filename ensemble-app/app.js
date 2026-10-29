@@ -317,11 +317,14 @@ function buildKeyboard() {
     let letter = null;
     if (KB_WHITE.has(pc)) {
       el.className = "kbw"; el.style.left = (wIdx * 100 / whites) + "%"; el.style.width = (100 / whites) + "%";
-      letter = "asdfghjkl;"[wIdx] || null; wIdx++;
+      letter = "asdfghjkl;1234567890"[wIdx] || null; wIdx++;
       if (pc === 0) { const sp = document.createElement("span"); sp.textContent = "ド" + (Math.floor(m / 12) - 1); el.appendChild(sp); }
     } else {
       el.className = "kbb"; el.style.left = ((wIdx - 0.31) * 100 / whites) + "%"; el.style.width = (62 / whites) + "%";
-      letter = ({ 0: "w", 1: "e", 3: "t", 4: "y", 5: "u", 7: "o", 8: "p" })[wIdx - 1] || null;
+      // 黒鍵: 最初の10白鍵分は上の段（w,e,t,y,u,o,p）、それより高い音は余りのキー（q,r,i,z,x,c,v）
+      letter = (wIdx - 1 < 10)
+        ? ({ 0: "w", 1: "e", 3: "t", 4: "y", 5: "u", 7: "o", 8: "p" })[wIdx - 1] || null
+        : ({ 0: "q", 1: "r", 3: "i", 4: "z", 5: "x", 7: "c", 8: "v" })[wIdx - 11] || null;
     }
     if (letter) {
       kbKeyMap.set(letter, m);
