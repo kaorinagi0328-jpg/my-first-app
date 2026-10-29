@@ -317,14 +317,13 @@ function buildKeyboard() {
     let letter = null;
     if (KB_WHITE.has(pc)) {
       el.className = "kbw"; el.style.left = (wIdx * 100 / whites) + "%"; el.style.width = (100 / whites) + "%";
-      letter = "asdfghjkl;1234567890"[wIdx] || null; wIdx++;
+      // 白鍵: オクターブごとに同じ形が繰り返す2段式（下段=Z列、次のオクターブ=Q列、その次=I列）
+      letter = (["zxcvbnm", "qwertyu", "iop"][Math.floor(wIdx / 7)] || "")[wIdx % 7] || null; wIdx++;
       if (pc === 0) { const sp = document.createElement("span"); sp.textContent = "ド" + (Math.floor(m / 12) - 1); el.appendChild(sp); }
     } else {
       el.className = "kbb"; el.style.left = ((wIdx - 0.31) * 100 / whites) + "%"; el.style.width = (62 / whites) + "%";
-      // 黒鍵: 最初の10白鍵分は上の段（w,e,t,y,u,o,p）、それより高い音は余りのキー（q,r,i,z,x,c,v）
-      letter = (wIdx - 1 < 10)
-        ? ({ 0: "w", 1: "e", 3: "t", 4: "y", 5: "u", 7: "o", 8: "p" })[wIdx - 1] || null
-        : ({ 0: "q", 1: "r", 3: "i", 4: "z", 5: "x", 7: "c", 8: "v" })[wIdx - 11] || null;
+      // 黒鍵: 各オクターブとも白鍵の1段上のキー（下段オクターブ=A列 s,d,g,h,j／上段オクターブ=数字列 2,3,5,6,7）
+      letter = ([{ 0: "s", 1: "d", 3: "g", 4: "h", 5: "j" }, { 0: "2", 1: "3", 3: "5", 4: "6", 5: "7" }, { 0: "9", 1: "0" }][Math.floor((wIdx - 1) / 7)] || {})[(wIdx - 1) % 7] || null;
     }
     if (letter) {
       kbKeyMap.set(letter, m);
