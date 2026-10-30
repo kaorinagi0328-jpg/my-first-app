@@ -372,6 +372,10 @@ function pressKey(midi, el) {
 function playTapSound() {
   const ctx = ensureCtx(); if (ctx.state === "suspended") ctx.resume();
   const t = ctx.currentTime;
+  // リズムパートを選んでいるときは、その楽器の音でタップを返す
+  const p = (typeof selectedPart === "function") ? selectedPart() : null;
+  const first = p && p.notes ? p.notes.find((n) => n.unpitched) : null;
+  if (first) { percNodes(t, ctx.destination, 1.4, first.midi); return; }
   const osc = ctx.createOscillator(), g = ctx.createGain();
   osc.type = "sine"; osc.frequency.setValueAtTime(170, t); osc.frequency.exponentialRampToValueAtTime(70, t + 0.09);
   g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
@@ -423,14 +427,70 @@ function clickTone(at, accent, dest) {
   return osc;
 }
 function countInBeats() { return $("countIn") && $("countIn").checked ? (song.beatsPerMeasure || 4) : 0; }
-// 打楽器のガイド音（短いノック音）
-function hitTone(at, dest, gainMul = 1) {
+// 打楽器のガイド音: 楽器ごとに聞き分けられるよう、音程のない音符の表示音高(display-step/octave→midi)で音色を変える
+// 48=大太鼓(C3) / 71=小太鼓(B4) / 77=ボンゴ・シンバル(F5) / 74=タンブリン(D5) / 69=マラカス(A4) / 76=クラベス(E5)
+let _noiseBuf = null;
+function noiseBuffer(ctx) {
+  if (_noiseBuf) return _noiseBuf;
+  const len = Math.floor(ctx.sampleRate * 0.5);
+  _noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d = _noiseBuf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  return _noiseBuf;
+}
+function percNodes(at, dest, gainMul, midi) {
   const ctx = ensureCtx();
-  const osc = ctx.createOscillator(); const g = ctx.createGain();
-  osc.type = "triangle"; osc.frequency.setValueAtTime(640, at); osc.frequency.exponentialRampToValueAtTime(240, at + 0.05);
-  g.gain.setValueAtTime(0.26 * gainMul, at); g.gain.exponentialRampToValueAtTime(0.001, at + 0.07);
-  osc.connect(g).connect(dest); osc.start(at); osc.stop(at + 0.08);
-  return osc;
+  const nodes = [];
+  const base = 0.30 * gainMul;
+  const noise = (t0, filterType, freq, q, dur, vol) => {
+    const src = ctx.createBufferSource(); src.buffer = noiseBuffer(ctx);
+    const f = ctx.createBiquadFilter(); f.type = filterType; f.frequency.value = freq; f.Q.value = q;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    src.connect(f).connect(g).connect(dest); src.start(t0); src.stop(t0 + dur + 0.02);
+    nodes.push(src);
+  };
+  const tone = (t0, type, f0, f1, dur, vol) => {
+    const osc = ctx.createOscillator(); const g = ctx.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(f0, t0);
+    if (f1 && f1 !== f0) osc.frequency.exponentialRampToValueAtTime(f1, t0 + dur * 0.8);
+    g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    osc.connect(g).connect(dest); osc.start(t0); osc.stop(t0 + dur + 0.02);
+    nodes.push(osc);
+  };
+  switch (midi) {
+    case 48: // 大太鼓: 低いドン
+      tone(at, "sine", 150, 52, 0.30, base * 2.6);
+      noise(at, "lowpass", 500, 0.7, 0.05, base * 0.5);
+      break;
+    case 71: // 小太鼓: バチッというスネア
+      noise(at, "bandpass", 1900, 0.8, 0.11, base * 1.5);
+      tone(at, "triangle", 190, 150, 0.06, base * 0.6);
+      break;
+    case 77: // ボンゴ・シンバル: 金属っぽい響き
+      noise(at, "highpass", 7600, 0.7, 0.26, base * 0.8);
+      tone(at, "square", 4150, 3900, 0.16, base * 0.10);
+      break;
+    case 74: // タンブリン: ジャラッというジングル
+      noise(at, "highpass", 8200, 0.7, 0.085, base * 1.0);
+      noise(at + 0.035, "highpass", 8200, 0.7, 0.06, base * 0.5);
+      break;
+    case 69: // マラカス: シャッというシェイカー
+      noise(at, "bandpass", 5800, 0.7, 0.06, base * 1.2);
+      break;
+    case 76: // クラベス: 高い木のカッ
+      tone(at, "sine", 2350, 2100, 0.05, base * 1.1);
+      noise(at, "highpass", 3200, 0.7, 0.02, base * 0.3);
+      break;
+    default: // それ以外（内蔵サンプル等）は従来のノック音
+      tone(at, "triangle", 640, 240, 0.07, base * 0.87);
+      break;
+  }
+  return nodes;
+}
+function hitTone(at, dest, gainMul = 1, midi = null) {
+  const nodes = percNodes(at, dest, gainMul, midi);
+  return { stop() { nodes.forEach((n) => { try { n.stop(); } catch {} }); } };
 }
 function scheduleModel(notes, onEnded, endNotes, opts = {}) {
   const ctx = ensureCtx();
@@ -442,7 +502,7 @@ function scheduleModel(notes, onEnded, endNotes, opts = {}) {
   // 全ての音を1つのマスター音量経由にし、停止時はマスターを切断+全オシレータ停止で即時に音を止める
   // (予約済みの音は setTimeout を消すだけでは止まらないため)
   const master = ctx.createGain(); master.gain.value = 1; master.connect(ctx.destination);
-  const oscs = notes.map((n) => { const at = startAt + conv.toSec(n.start); return n.unpitched ? hitTone(at, master, n.gain != null ? n.gain : 1) : playTone(n.midi, at, Math.max(0.05, conv.toSec(n.start + n.dur) - conv.toSec(n.start)), master, n.gain != null ? 0.18 * n.gain : 0.18); });
+  const oscs = notes.map((n) => { const at = startAt + conv.toSec(n.start); return n.unpitched ? hitTone(at, master, n.gain != null ? n.gain : 1, n.midi) : playTone(n.midi, at, Math.max(0.05, conv.toSec(n.start + n.dur) - conv.toSec(n.start)), master, n.gain != null ? 0.18 * n.gain : 0.18); });
   // メトロノーム: カウントインから曲の終わりまで全拍クリック (小節頭は高い音でアクセント)
   if (opts.metro || ($("metronome") && $("metronome").checked)) {
     const measure = song.beatsPerMeasure || 4;
