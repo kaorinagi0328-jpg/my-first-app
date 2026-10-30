@@ -442,12 +442,20 @@ function percNodes(at, dest, gainMul, midi) {
   const ctx = ensureCtx();
   const nodes = [];
   const base = 0.30 * gainMul;
+  // フィルタは宛先ごとに共有し、打音ごとの生成ノード数を抑える（全パート再生時の負荷対策）
+  const sharedFilter = (type, freq, q) => {
+    const key = "_pf_" + type + "_" + freq + "_" + q;
+    if (!dest[key]) {
+      const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+      f.connect(dest); dest[key] = f;
+    }
+    return dest[key];
+  };
   const noise = (t0, filterType, freq, q, dur, vol) => {
     const src = ctx.createBufferSource(); src.buffer = noiseBuffer(ctx);
-    const f = ctx.createBiquadFilter(); f.type = filterType; f.frequency.value = freq; f.Q.value = q;
     const g = ctx.createGain();
     g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
-    src.connect(f).connect(g).connect(dest); src.start(t0); src.stop(t0 + dur + 0.02);
+    src.connect(g).connect(sharedFilter(filterType, freq, q)); src.start(t0); src.stop(t0 + dur + 0.02);
     nodes.push(src);
   };
   const tone = (t0, type, f0, f1, dur, vol) => {
@@ -461,7 +469,6 @@ function percNodes(at, dest, gainMul, midi) {
   switch (midi) {
     case 48: // 大太鼓: 低いドン
       tone(at, "sine", 150, 52, 0.30, base * 2.6);
-      noise(at, "lowpass", 500, 0.7, 0.05, base * 0.5);
       break;
     case 71: // 小太鼓: バチッというスネア
       noise(at, "bandpass", 1900, 0.8, 0.11, base * 1.5);
@@ -469,7 +476,6 @@ function percNodes(at, dest, gainMul, midi) {
       break;
     case 77: // ボンゴ・シンバル: 金属っぽい響き
       noise(at, "highpass", 7600, 0.7, 0.26, base * 0.8);
-      tone(at, "square", 4150, 3900, 0.16, base * 0.10);
       break;
     case 74: // タンブリン: ジャラッというジングル
       noise(at, "highpass", 8200, 0.7, 0.085, base * 1.0);
@@ -480,7 +486,6 @@ function percNodes(at, dest, gainMul, midi) {
       break;
     case 76: // クラベス: 高い木のカッ
       tone(at, "sine", 2350, 2100, 0.05, base * 1.1);
-      noise(at, "highpass", 3200, 0.7, 0.02, base * 0.3);
       break;
     default: // それ以外（内蔵サンプル等）は従来のノック音
       tone(at, "triangle", 640, 240, 0.07, base * 0.87);
@@ -502,19 +507,36 @@ function scheduleModel(notes, onEnded, endNotes, opts = {}) {
   // 全ての音を1つのマスター音量経由にし、停止時はマスターを切断+全オシレータ停止で即時に音を止める
   // (予約済みの音は setTimeout を消すだけでは止まらないため)
   const master = ctx.createGain(); master.gain.value = 1; master.connect(ctx.destination);
-  const oscs = notes.map((n) => { const at = startAt + conv.toSec(n.start); return n.unpitched ? hitTone(at, master, n.gain != null ? n.gain : 1, n.midi) : playTone(n.midi, at, Math.max(0.05, conv.toSec(n.start + n.dur) - conv.toSec(n.start)), master, n.gain != null ? 0.18 * n.gain : 0.18); });
+  // 全音を最初に作ると、パート数が多い曲（全パートガイド等）で低速な端末が固まり音も欠ける。
+  // 予定表だけ先に作り、再生しながら少し先の音を順に作っていく（先行2.5秒・300msごと）
+  const plan = [];
+  notes.forEach((n) => {
+    const at = startAt + conv.toSec(n.start);
+    plan.push({ sec: at, make: () => n.unpitched ? hitTone(at, master, n.gain != null ? n.gain : 1, n.midi) : playTone(n.midi, at, Math.max(0.05, conv.toSec(n.start + n.dur) - conv.toSec(n.start)), master, n.gain != null ? 0.18 * n.gain : 0.18) });
+  });
   // メトロノーム: カウントインから曲の終わりまで全拍クリック (小節頭は高い音でアクセント)
   if (opts.metro || ($("metronome") && $("metronome").checked)) {
     const measure = song.beatsPerMeasure || 4;
     const totalBeats = Math.ceil(Math.max(...lenNotes.map((n) => n.start + n.dur)));
     for (let b = -countIn; b < totalBeats; b++) {
       const accent = ((b % measure) + measure) % measure === 0;
-      oscs.push(clickTone(b < 0 ? startAt + b * conv.segs[0].spb : startAt + conv.toSec(b), accent, master));
+      const at = b < 0 ? startAt + b * conv.segs[0].spb : startAt + conv.toSec(b);
+      plan.push({ sec: at, make: () => clickTone(at, accent, master) });
     }
   }
+  plan.sort((a, b) => a.sec - b.sec);
+  const oscs = [];
+  let planIdx = 0;
+  const pump = () => {
+    const horizon = ctx.currentTime + 2.5;
+    while (planIdx < plan.length && plan[planIdx].sec < horizon) { oscs.push(plan[planIdx].make()); planIdx++; }
+    if (planIdx >= plan.length) clearInterval(pumpTimer);
+  };
+  const pumpTimer = setInterval(pump, 300);
+  pump();
   const totalSec = conv.toSec(Math.max(...lenNotes.map((n) => n.start + n.dur)));
   let endTimer = null; let pausedFlag = false;
-  const armEnd = (delaySec) => { endTimer = setTimeout(() => { try { master.disconnect(); } catch {} onEnded(); }, Math.max(0, delaySec) * 1000); };
+  const armEnd = (delaySec) => { endTimer = setTimeout(() => { clearInterval(pumpTimer); try { master.disconnect(); } catch {} onEnded(); }, Math.max(0, delaySec) * 1000); };
   armEnd((startAt - ctx.currentTime) + totalSec + 0.3);
   let stopped = false;
   return {
@@ -533,6 +555,7 @@ function scheduleModel(notes, onEnded, endNotes, opts = {}) {
     stop: () => {
       if (stopped) return; stopped = true;
       if (pausedFlag) { pausedFlag = false; ctx.resume(); }
+      clearInterval(pumpTimer);
       clearTimeout(endTimer);
       try { master.gain.cancelScheduledValues(ctx.currentTime); master.gain.setValueAtTime(0, ctx.currentTime); } catch {}
       oscs.forEach((o) => { try { o.stop(); } catch {} });
