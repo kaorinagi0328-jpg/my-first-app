@@ -1077,6 +1077,8 @@ $("inMicBtn").addEventListener("click", () => { stopAll(); $("kbMode").checked =
 $("inKbBtn").addEventListener("click", () => { stopAll(); $("kbMode").checked = true; $("padMode").checked = false; refreshKbUI(); $("status").textContent = "画面の鍵盤で演奏：光った鍵盤をタッチ（パソコンはアルファベットのキーでもOK）。マイクは使いません"; });
 $("inPadBtn").addEventListener("click", () => { stopAll(); $("padMode").checked = true; $("kbMode").checked = false; refreshKbUI(); $("status").textContent = "画面タップで演奏：オレンジのタイミングで大きなボタンをタップ（パソコンはスペースキーでもOK）。マイクは使いません"; });
 $("padBtn").addEventListener("pointerdown", (ev) => { ev.preventDefault(); padTap(); });
+// 音符の長さに合わせて長押しすると右クリックメニューが出て演奏が止まるので、鍵盤とパッドでは出さない
+["kbWrap", "padBtn"].forEach((id) => { const el = $(id); if (el) el.addEventListener("contextmenu", (ev) => ev.preventDefault()); });
 document.addEventListener("keydown", (e) => {
   if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
   const t = e.target;

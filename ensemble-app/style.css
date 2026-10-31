@@ -58,7 +58,8 @@ summary{cursor:pointer;color:#34d399}
 .secbtn{font-size:1.15em;font-weight:700;padding:8px 18px;margin:2px;border-radius:999px;border:2px solid #10b981;background:#0b2e1f;color:#d1fae5;cursor:pointer}
 .secbtn.on{background:#059669;color:#fff;box-shadow:0 0 10px #10b98188}
 /* 鍵盤モード */
-#kbKeys{position:relative;height:118px;background:#081f14;border:1px solid #1f5c3d;border-radius:10px;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;margin-top:6px}
+#kbKeys{position:relative;height:118px;background:#081f14;border:1px solid #1f5c3d;border-radius:10px;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;margin-top:6px}
+#kbKeys .kbw,#kbKeys .kbb{-webkit-touch-callout:none}
 #kbKeys .kbw{position:absolute;top:0;height:100%;background:linear-gradient(180deg,#e9e4d2,#fbf8ec);border-right:1px solid #9aa48f;border-bottom-left-radius:5px;border-bottom-right-radius:5px;box-sizing:border-box;cursor:pointer}
 #kbKeys .kbw span{position:absolute;bottom:4px;left:0;right:0;text-align:center;font-size:11px;color:#7c6a2f;font-weight:700;pointer-events:none}
 #kbKeys .kbb{position:absolute;top:0;height:58%;background:linear-gradient(180deg,#2a3a30,#060d09);border-bottom-left-radius:4px;border-bottom-right-radius:4px;z-index:2;cursor:pointer;box-shadow:0 3px 5px rgba(0,0,0,.5)}
@@ -72,5 +73,5 @@ summary{cursor:pointer;color:#34d399}
 .inbtn.sel{background:linear-gradient(90deg,#f59e0b,#ea580c);opacity:1;box-shadow:0 3px 14px rgba(245,158,11,.55)}
 #kbKeys .kbl{position:absolute;bottom:19px;left:0;right:0;text-align:center;font-size:10px;color:#a16207;font-weight:700;pointer-events:none}
 #kbKeys .kbb .kbl{bottom:3px;color:#fde68a;font-size:9px}
-#padBtn{font-size:32px;font-weight:900;text-align:center;padding:36px 10px;margin-top:8px;border-radius:16px;background:linear-gradient(180deg,#ea580c,#c2410c);color:#fff;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:none;box-shadow:0 4px 14px rgba(234,88,12,.45)}
+#padBtn{font-size:32px;font-weight:900;text-align:center;padding:36px 10px;margin-top:8px;border-radius:16px;background:linear-gradient(180deg,#ea580c,#c2410c);color:#fff;cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none;box-shadow:0 4px 14px rgba(234,88,12,.45)}
 #padBtn.hit{background:#059669}
