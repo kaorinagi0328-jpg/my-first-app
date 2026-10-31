@@ -9,9 +9,20 @@
 <body>
 <header>
   <h1>🎼 合奏★マスター</h1>
-  <p>自分のパートを攻略せよ！ お手本にピタッと合わせて XP をためて、合奏マスターをめざそう。打楽器パートは手拍子でリズム判定もできるよ。音はこの端末の中だけで処理されます。</p>
+  <p>自分のパートを攻略せよ！ XP をためると キミのキャラクターが進化するよ。目指せ マエストロ👑 打楽器パートは手拍子でリズム判定もできるよ。音はこの端末の中だけで処理されます。</p>
 </header>
 <main>
+  <section class="card charcard">
+    <div class="charrow">
+      <div id="charFace" class="charface">🎵</div>
+      <div class="charinfo">
+        <p class="charname"><span id="charStage">みならい</span> <span id="charLv" class="muted"></span></p>
+        <div class="bar charbar"><div id="charBar"></div></div>
+        <p id="charNext" class="charnext"></p>
+      </div>
+    </div>
+    <details id="badgeBox"><summary>🏅 バッジずかん（<span id="badgeCount">0</span>/8）</summary><div id="badgeGrid"></div></details>
+  </section>
   <section class="card">
     <h2>⚔️ クエスト準備（楽譜）</h2>
     <p>
@@ -137,6 +148,14 @@
     </div>
   </section>
 </main>
+<div id="evoOverlay" hidden>
+  <div class="evobox">
+    <p class="evoemoji" id="evoEmoji">🎶</p>
+    <p class="evotitle">✨ しんかした！ ✨</p>
+    <p id="evoText" class="game"></p>
+    <p><button id="evoClose" type="button">やったー！ 🎉</button></p>
+  </div>
+</div>
 <script src="app.js"></script>
 </body>
 </html>
