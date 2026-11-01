@@ -1530,6 +1530,17 @@ async function startSing() {
       requestAnimationFrame(tick);
       return;
     }
+    if (pad) {
+      // タップモードはマイクを使わない（analyser が無い）ので、時刻だけでロールを進める。
+      // 以前はこの分岐が無く、マイク用の処理に落ちて止まってしまっていた
+      const pBeat = s.conv.toBeat(ctx.currentTime - s.startAt);
+      if (pBeat < 0) $("livePitch").textContent = "あと " + Math.ceil(-pBeat) + " 拍でスタート";
+      else if ($("status").textContent.startsWith("カウントイン")) $("status").textContent = "オレンジのタイミングでタップしてね！";
+      updateCurrent(notes, pBeat);
+      drawRoll(notes, null, Math.max(0, pBeat), pBeat < 0 ? String(Math.ceil(-pBeat)) : null, pageView(pBeat, notes));
+      requestAnimationFrame(tick);
+      return;
+    }
     analyser.getFloatTimeDomainData(buf);
     const f = detectPitch(buf, ctx.sampleRate);
     const beat = s.conv.toBeat(ctx.currentTime - s.startAt);
