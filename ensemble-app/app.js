@@ -474,8 +474,13 @@ function percNodes(at, dest, gainMul, midi) {
       noise(at, "bandpass", 1900, 0.8, 0.11, base * 1.5);
       tone(at, "triangle", 190, 150, 0.06, base * 0.6);
       break;
-    case 77: // ボンゴ・シンバル: 金属っぽい響き
-      noise(at, "highpass", 7600, 0.7, 0.26, base * 0.8);
+    case 77: // ボンゴ高（右・＋）: 高い方の太鼓のポン
+      tone(at, "sine", 470, 230, 0.12, base * 1.5);
+      noise(at, "highpass", 3800, 0.7, 0.02, base * 0.3);
+      break;
+    case 72: // ボンゴ低（左・○）: 低い方の太鼓のポン
+      tone(at, "sine", 300, 140, 0.14, base * 1.6);
+      noise(at, "highpass", 3000, 0.7, 0.02, base * 0.3);
       break;
     case 74: // タンブリン: ジャラッというジングル
       noise(at, "highpass", 8200, 0.7, 0.085, base * 1.0);
