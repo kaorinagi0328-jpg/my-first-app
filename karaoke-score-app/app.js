@@ -574,6 +574,71 @@ function levelOf(xp) { let lv = 1, rest = xp, need = 80; while (rest >= need) { 
 function updateLevelInfo() {
   const s = loadSave(); const L = levelOf(s.xp);
   $("levelInfo").textContent = "⭐ レベル " + L.level + "（次のレベルまで あと " + (L.need - L.into) + " XP）";
+  updateCharCard();
+}
+
+// ---------- キャラクター成長（かけだし歌手 → レジェンド歌手）とバッジ ----------
+const STAGES = [
+  { lv: 1, emoji: "🎵", name: "かけだし歌手" },
+  { lv: 2, emoji: "🎤", name: "カラオケ名人" },
+  { lv: 3, emoji: "🎶", name: "ステージシンガー" },
+  { lv: 5, emoji: "🌟", name: "スターシンガー" },
+  { lv: 7, emoji: "🎙️", name: "プロ歌手" },
+  { lv: 10, emoji: "✨", name: "トップシンガー" },
+  { lv: 14, emoji: "🌈", name: "スーパースター" },
+  { lv: 18, emoji: "👑", name: "レジェンド歌手" },
+];
+function stageOf(level) { let idx = 0; STAGES.forEach((s, i) => { if (level >= s.lv) idx = i; }); return { cur: STAGES[idx], next: STAGES[idx + 1] || null, idx }; }
+function xpForLevel(lv) { return 40 * lv * (lv - 1); } // レベル到達に必要な累計XP（levelOf と対）
+const BADGES = [
+  { id: "first", emoji: "🎉", name: "はじめての歌", hint: "バトルを最後まで歌おう" },
+  { id: "srank", emoji: "🏆", name: "Sランクゲット", hint: "90点以上をとろう" },
+  { id: "long", emoji: "🎼", name: "ロングソング", hint: "40音以上の歌を最後まで" },
+  { id: "drill", emoji: "🎯", name: "音程ピッタリ", hint: "音程合わせチャレンジで全問正解" },
+  { id: "nobasu", emoji: "🌈", name: "のばす・きる名人", hint: "のばす・きるボーナス8点以上" },
+  { id: "combo", emoji: "🔥", name: "コンボ30", hint: "30コンボつづけよう" },
+  { id: "parts", emoji: "🎤", name: "両パートチャレンジ", hint: "2つのちがうパートで歌おう" },
+  { id: "days", emoji: "📅", name: "3日れんしゅう", hint: "3つのちがう日に練習しよう" },
+];
+function updateCharCard() {
+  const face = $("charFace"); if (!face) return;
+  const s = loadSave(); const L = levelOf(s.xp); const st = stageOf(L.level);
+  face.textContent = st.cur.emoji;
+  $("charStage").textContent = st.cur.name;
+  $("charLv").textContent = "Lv." + L.level + " ・ " + s.xp + " XP";
+  if (st.next) {
+    const from = xpForLevel(st.cur.lv), to = xpForLevel(st.next.lv);
+    $("charBar").style.width = Math.max(0, Math.min(100, Math.round(((s.xp - from) / (to - from)) * 100))) + "%";
+    $("charNext").textContent = "あと " + (to - s.xp) + " XP で " + st.next.emoji + "「" + st.next.name + "」に しんか！";
+  } else {
+    $("charBar").style.width = "100%";
+    $("charNext").textContent = "👑 さいこうランク！ キミは レジェンド歌手！";
+  }
+  const got = s.badges || {};
+  $("badgeCount").textContent = BADGES.filter((b) => got[b.id]).length;
+  const grid = $("badgeGrid"); grid.innerHTML = "";
+  BADGES.forEach((b) => {
+    const d = document.createElement("div"); d.className = "badge" + (got[b.id] ? "" : " locked");
+    const e = document.createElement("div"); e.className = "bemoji"; e.textContent = got[b.id] ? b.emoji : "❔";
+    const n = document.createElement("div"); n.className = "bname"; n.textContent = b.name;
+    const h = document.createElement("div"); h.className = "bhint"; h.textContent = got[b.id] ? "ゲット！" : b.hint;
+    d.appendChild(e); d.appendChild(n); d.appendChild(h); grid.appendChild(d);
+  });
+}
+function showEvolution(fromStage, toStage) {
+  const ov = $("evoOverlay"); if (!ov) return;
+  $("evoEmoji").textContent = toStage.cur.emoji;
+  $("evoText").innerHTML = "「" + fromStage.cur.name + "」から<br>" + toStage.cur.emoji + "「" + toStage.cur.name + "」に しんかした！";
+  ov.hidden = false;
+  const emo = ["🎉", "⭐", "🎵", "🎶", "✨", "🌟"];
+  for (let i = 0; i < 26; i++) {
+    const sp = document.createElement("span"); sp.className = "confetti"; sp.textContent = emo[i % emo.length];
+    sp.style.left = Math.round(Math.random() * 98) + "%";
+    sp.style.animationDuration = (1.8 + Math.random() * 1.4) + "s";
+    sp.style.animationDelay = (Math.random() * 0.5) + "s";
+    ov.appendChild(sp);
+    setTimeout(() => sp.remove(), 4200);
+  }
 }
 
 // ---------- 音程合わせ練習（ウォームアップ） ----------
@@ -693,11 +758,19 @@ function wuJudge(q, midi, samples) {
 function wuFinish(q) {
   const total = q.score; const xp = Math.round(total / 5);
   const save = loadSave(); const beforeLv = levelOf(save.xp).level;
-  save.xp += xp; storeSave(save); const L = levelOf(save.xp);
+  save.xp += xp;
+  save.badges = save.badges || {}; save.days = Array.isArray(save.days) ? save.days : [];
+  const nowD = new Date(); const todayStr = nowD.getFullYear() + "-" + (nowD.getMonth() + 1) + "-" + nowD.getDate();
+  if (!save.days.includes(todayStr)) save.days.push(todayStr);
+  let drillBadge = false;
+  if (q.ok === q.targets.length && !save.badges.drill) { save.badges.drill = true; drillBadge = true; }
+  if (save.days.length >= 3 && !save.badges.days) { save.badges.days = true; drillBadge = true; }
+  storeSave(save); const L = levelOf(save.xp);
   $("wuInfo").textContent = "おつかれさま！ ウォームアップ完了";
   $("wuTarget").textContent = total + "点";
-  $("wuResult").innerHTML = "合っていたのは " + q.ok + " / " + q.targets.length + " 問　+" + xp + " XPゲット！" + (L.level > beforeLv ? "<br>🎉 レベルアップ！ レベル " + L.level + " になったよ！" : "") + "<br>この調子で歌の練習をはじめよう！";
+  $("wuResult").innerHTML = "合っていたのは " + q.ok + " / " + q.targets.length + " 問　+" + xp + " XPゲット！" + (L.level > beforeLv ? "<br>🎉 レベルアップ！ レベル " + L.level + " になったよ！" : "") + (drillBadge ? "<br>🏅 バッジゲット！ バッジずかんを見てね" : "") + "<br>この調子で歌の練習をはじめよう！";
   updateLevelInfo();
+  if (stageOf(L.level).idx > stageOf(beforeLv).idx) setTimeout(() => showEvolution(stageOf(beforeLv), stageOf(L.level)), 700);
   wuCleanup();
 }
 $("warmupBtn").addEventListener("click", () => { $("wuInfo").textContent = "「スタート」を押してね。お手本の音が出て、そのあと歌う時間になるよ"; $("warmupCard").hidden = false; $("warmupCard").scrollIntoView({ behavior: "smooth", block: "center" }); drawGauge(null); });
@@ -1013,6 +1086,21 @@ async function startSing() {
     const bestKey = song.title + "|" + selectedPart().name + "|" + $("startMeasure").value;
     const prevBest = save.best[bestKey] || 0; const isBest = result.total > prevBest;
     if (isBest) save.best[bestKey] = result.total;
+    // キャラ成長: 練習した日・パートを記録し、条件を満たしたバッジを与える
+    const beforeStageIdx = stageOf(beforeLv).idx;
+    save.badges = save.badges || {}; save.parts = Array.isArray(save.parts) ? save.parts : []; save.days = Array.isArray(save.days) ? save.days : [];
+    const nowD = new Date(); const todayStr = nowD.getFullYear() + "-" + (nowD.getMonth() + 1) + "-" + nowD.getDate();
+    if (!save.days.includes(todayStr)) save.days.push(todayStr);
+    const partName = selectedPart().name; if (!save.parts.includes(partName)) save.parts.push(partName);
+    const newBadges = [];
+    const grant = (id) => { if (!save.badges[id]) { save.badges[id] = true; newBadges.push(id); } };
+    grant("first");
+    if (result.total >= 90) grant("srank");
+    if (notes.length >= 40) grant("long");
+    if ((result.bonus || 0) >= 8) grant("nobasu");
+    if (maxCombo >= 30) grant("combo");
+    if (save.parts.length >= 2) grant("parts");
+    if (save.days.length >= 3) grant("days");
     storeSave(save); const L = levelOf(save.xp);
     const praise = result.total >= 90 ? "すごい！完璧にちかいよ！" : result.total >= 70 ? "とても上手！" : result.total >= 50 ? "よくがんばった！" : "れんしゅうあるのみ！次はもっとできるよ";
     // ランク分けと、良かったところ・レベルアップへのコメント
@@ -1047,9 +1135,12 @@ async function startSing() {
       "<br>👏 よかったところ: " + good.slice(0, 2).join("／") +
       "<br>🎯 レベルアップには: " + tips.slice(0, 2).join("／") +
       (L.level > beforeLv ? "<br>🎉 レベルアップ！ レベル " + L.level + " になったよ！" : "") + (isBest && prevBest > 0 ? "<br>🏆 自己ベスト更新！（前: " + prevBest + "点）" : "");
+    if (newBadges.length) $("gameResult").innerHTML += "<br>" + newBadges.map((id) => { const b = BADGES.find((x) => x.id === id); return "🏅 バッジゲット！ " + b.emoji + "「" + b.name + "」"; }).join("<br>");
     $("xpBar").style.width = Math.round((L.into / L.need) * 100) + "%";
     $("xpInfo").textContent = "レベル " + L.level + " ・ 経験値 " + save.xp + " XP（次のレベルまで あと " + (L.need - L.into) + " XP）";
     updateLevelInfo();
+    const afterStage = stageOf(L.level);
+    if (afterStage.idx > beforeStageIdx) setTimeout(() => showEvolution(stageOf(beforeLv), afterStage), 700);
     $("status").textContent = "採点が終わりました";
     playing = null;
   }
@@ -1098,6 +1189,7 @@ $("restartBtn").addEventListener("click", () => {
   if (playing) playing.noScore = true; // 歌っている途中なら採点せずに切り替える
   if (mode === "sing") startSing(); else startModel();
 });
+$("evoClose").addEventListener("click", () => { $("evoOverlay").hidden = true; });
 updateLevelInfo();
 // 前回読み込んだ曲がこの端末に保存されていれば復元する（?song= 指定があるときは、そちらを優先）
 if (!songParam) {

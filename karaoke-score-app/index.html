@@ -9,9 +9,20 @@
 <body>
 <header>
   <h1>🎤 カラオケ★マスター</h1>
-  <p>歌って、音程を攻略せよ！ お手本にピタッと合わせて XP をためて、カラオケマスターをめざそう。声はこの端末の中だけで処理されます。</p>
+  <p>歌って、音程を攻略せよ！ XP をためると キミの歌手キャラクターが進化するよ。目指せ レジェンド歌手👑 声はこの端末の中だけで処理されます。</p>
 </header>
 <main>
+  <section class="card charcard">
+    <div class="charrow">
+      <div id="charFace" class="charface">🎵</div>
+      <div class="charinfo">
+        <p class="charname"><span id="charStage">かけだし歌手</span> <span id="charLv" class="muted"></span></p>
+        <div class="bar charbar"><div id="charBar"></div></div>
+        <p id="charNext" class="charnext"></p>
+      </div>
+    </div>
+    <details id="badgeBox"><summary>🏅 バッジずかん（<span id="badgeCount">0</span>/8）</summary><div id="badgeGrid"></div></details>
+  </section>
   <section class="card">
     <h2>⚔️ クエスト準備（楽譜）</h2>
     <p>
@@ -118,6 +129,14 @@
     </div>
   </section>
 </main>
+<div id="evoOverlay" hidden>
+  <div class="evobox">
+    <p class="evoemoji" id="evoEmoji">🎤</p>
+    <p class="evotitle">✨ しんかした！ ✨</p>
+    <p id="evoText" class="game"></p>
+    <p><button id="evoClose" type="button">やったー！ 🎉</button></p>
+  </div>
+</div>
 <script src="app.js"></script>
 </body>
 </html>

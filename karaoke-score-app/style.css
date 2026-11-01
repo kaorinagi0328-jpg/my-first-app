@@ -1,40 +1,40 @@
-body{font-family:system-ui,-apple-system,"Hiragino Sans",sans-serif;margin:0;background:linear-gradient(180deg,#0b1026 0%,#141b3f 55%,#1b1040 100%);background-attachment:fixed;color:#e8ecf8;min-height:100vh}
+body{font-family:"Hiragino Maru Gothic ProN","M PLUS Rounded 1c",system-ui,-apple-system,"Hiragino Sans",sans-serif;margin:0;background:linear-gradient(180deg,#7dd3fc 0%,#fbcfe8 52%,#fef9c3 100%);background-attachment:fixed;color:#334155;min-height:100vh}
 header{padding:14px 16px 2px;max-width:960px;margin:auto;text-align:center}
-header h1{font-size:34px;margin:0;letter-spacing:.04em;font-weight:900;background:linear-gradient(90deg,#22d3ee,#818cf8,#e879f9,#fbbf24);-webkit-background-clip:text;background-clip:text;color:transparent}
-header p{color:#a5b0d6;margin:8px 0 0}
+header h1{font-size:36px;margin:0;letter-spacing:.04em;font-weight:900;background:linear-gradient(90deg,#ec4899,#f59e0b,#22c55e,#0ea5e9,#ec4899);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 2px 5px rgba(255,255,255,.65))}
+header p{color:#9d2460;margin:8px 0 0;font-weight:700}
 main{max-width:880px;margin:auto;padding:8px 16px 40px;display:grid;gap:16px}
 audio{width:100%}
 #noteResults li.miss{cursor:pointer;text-decoration:underline dotted}
-#noteResults li.miss:hover{color:#fda4af}
-.card{background:rgba(23,29,62,.88);border:1px solid #39447c;border-radius:16px;padding:16px 18px;box-shadow:0 4px 18px rgba(0,0,0,.45);min-width:0}
-.card h2{margin-top:2px;color:#7dd3fc;letter-spacing:.03em;border-bottom:2px solid #2c3768;padding-bottom:6px}
-button,.file{display:inline-block;background:linear-gradient(90deg,#2563eb,#06b6d4);color:#fff;border:0;border-radius:999px;padding:11px 20px;font-size:16px;font-weight:700;cursor:pointer;margin:4px 4px 4px 0;box-shadow:0 2px 10px rgba(37,99,235,.45)}
-button:active{transform:scale(.97)}
-button:disabled{background:#39406b;color:#8b94b8;cursor:default;box-shadow:none}
-button#singBtn{background:linear-gradient(90deg,#f97316,#ec4899);font-size:19px;padding:13px 26px;box-shadow:0 3px 14px rgba(236,72,153,.5)}
-button#warmupBtn{background:linear-gradient(90deg,#7c3aed,#06b6d4)}
-button#stopBtn{background:linear-gradient(90deg,#dc2626,#991b1b)}
-button#restartBtn{background:linear-gradient(90deg,#059669,#14b8a6)}
+#noteResults li.miss:hover{color:#e11d48}
+.card{background:rgba(255,255,255,.94);border:3px solid #f472b6;border-radius:22px;padding:16px 18px;box-shadow:0 8px 24px rgba(190,24,93,.18);min-width:0}
+.card h2{margin-top:2px;color:#db2777;letter-spacing:.03em;border-bottom:3px dotted #38bdf8;padding-bottom:6px}
+button,.file{display:inline-block;background:linear-gradient(90deg,#0ea5e9,#22d3ee);color:#fff;border:0;border-radius:999px;padding:11px 20px;font-size:16px;font-weight:800;cursor:pointer;margin:4px 4px 4px 0;box-shadow:0 3px 0 #0369a1,0 6px 14px rgba(2,132,199,.3)}
+button:active{transform:translateY(2px) scale(.98);box-shadow:0 1px 0 #0369a1}
+button:disabled{background:#e2e8f0;color:#94a3b8;cursor:default;box-shadow:none}
+button#singBtn{background:linear-gradient(90deg,#f59e0b,#ec4899);font-size:20px;padding:13px 26px;box-shadow:0 4px 0 #9d174d,0 8px 18px rgba(236,72,153,.45)}
+button#warmupBtn{background:linear-gradient(90deg,#a3e635,#22c55e);box-shadow:0 3px 0 #3f6212,0 6px 14px rgba(34,197,94,.3)}
+button#stopBtn{background:linear-gradient(90deg,#ef4444,#dc2626);box-shadow:0 3px 0 #7f1d1d,0 6px 14px rgba(220,38,38,.3)}
+button#restartBtn{background:linear-gradient(90deg,#8b5cf6,#ec4899);box-shadow:0 3px 0 #6d28d9,0 6px 14px rgba(139,92,246,.3)}
 label{display:block;margin:10px 0}
-select{font-size:16px;padding:6px;background:#0f1533;color:#e8ecf8;border:1px solid #39447c;border-radius:8px}
-input[type=range]{accent-color:#22d3ee}
-.muted{color:#9aa7c7}.live{font-size:19px;font-weight:700;min-height:30px;color:#fde047}
-canvas{width:100%;height:auto;background:#0d1330;border:1px solid #2c3768;border-radius:12px}
-.score{font-size:28px}.score span{font-size:56px;font-weight:900;color:#facc15;text-shadow:0 0 18px rgba(250,204,21,.45)}
+select{font-size:16px;padding:6px;background:#fff;color:#334155;border:2px solid #38bdf8;border-radius:10px;font-weight:700}
+input[type=range]{accent-color:#ec4899}
+.muted{color:#7d8aa0}.live{font-size:19px;font-weight:800;min-height:30px;color:#d97706}
+canvas{width:100%;height:auto;background:#1e1b4b;border:3px solid #f472b6;border-radius:16px}
+.score{font-size:28px}.score span{font-size:56px;font-weight:900;color:#f59e0b;text-shadow:0 2px 0 #fde68a,0 0 18px rgba(245,158,11,.35)}
 #noteResults{line-height:1.8}
-.nowinfo{font-size:30px;font-weight:800;min-height:40px;margin:2px 0;color:#fbbf24}
+.nowinfo{font-size:30px;font-weight:800;min-height:40px;margin:2px 0;color:#db2777}
 .lyrics{font-size:22px;line-height:1.9;padding:8px 4px;overflow-x:auto;white-space:nowrap;min-width:0;max-width:100%}
-.lyrics span{display:inline-block;padding:2px 3px;border-radius:6px;color:#8b94b8;transition:all .1s}
+.lyrics span{display:inline-block;padding:2px 3px;border-radius:6px;color:#94a3b8;transition:all .1s}
 .lyrics span.on{background:#fde047;color:#111;font-weight:800;transform:scale(1.22)}
-.controls{position:sticky;top:0;z-index:20;background:rgba(23,29,62,.96);padding:8px 0 4px;margin:0 -4px}
+.controls{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.96);padding:8px 0 4px;margin:0 -4px}
 .controls p{margin:4px 0}
-.lyrics span.done{color:#38bdf8}
+.lyrics span.done{color:#059669}
 .game{font-size:22px;font-weight:700;line-height:1.7}
-.bar{background:#0f1533;border:1px solid #2c3768;border-radius:999px;height:16px;overflow:hidden;margin:8px 0}
-#xpBar{background:linear-gradient(90deg,#f59e0b,#facc15,#22d3ee);height:100%;width:0%;transition:width .6s}
-textarea{width:100%;font-size:12px;padding:6px;box-sizing:border-box;background:#0f1533;color:#e8ecf8;border:1px solid #39447c;border-radius:8px}
+.bar{background:#fff7ed;border:2px solid #f59e0b;border-radius:999px;height:18px;overflow:hidden;margin:8px 0}
+#xpBar{background:linear-gradient(90deg,#ec4899,#f59e0b,#22c55e,#38bdf8);height:100%;width:0%;transition:width .6s}
+textarea{width:100%;font-size:12px;padding:6px;box-sizing:border-box;background:#fff;color:#334155;border:2px solid #38bdf8;border-radius:10px}
 details{margin-top:8px}
-summary{cursor:pointer;color:#38bdf8}
+summary{cursor:pointer;color:#0284c7;font-weight:700}
 /* 背の低い画面（Chromebook等）では詰めて、音程バーと歌詞を1画面に収める */
 @media (max-height:860px){
   header{padding:6px 12px 0}
@@ -49,11 +49,43 @@ summary{cursor:pointer;color:#38bdf8}
   button{padding:8px 14px;font-size:14px}
   button#singBtn{font-size:16px;padding:10px 20px}
   label{margin:6px 0}
+  .charface{width:64px;height:64px;font-size:38px}
+  .charname{font-size:20px}
+  .charnext{font-size:13px}
+  .badge{min-width:76px}
+  .badge .bhint{display:none}
 }
-#noteStrip{display:flex;gap:1px;height:20px;margin:6px 0 10px;overflow:hidden;border-radius:6px;background:#1e293b}
+#noteStrip{display:flex;gap:1px;height:20px;margin:6px 0 10px;overflow:hidden;border-radius:6px;background:#fdf2f8}
 #noteStrip i{display:block;height:100%}
 #missList{line-height:1.8}
 #missList li.miss{cursor:pointer;text-decoration:underline dotted}
-#allNotes summary{cursor:pointer;color:#93c5fd;margin-top:6px}
-.secbtn{font-size:1.15em;font-weight:700;padding:8px 18px;margin:2px;border-radius:999px;border:2px solid #5b7fff;background:#16213b;color:#dbeafe;cursor:pointer}
-.secbtn.on{background:#5b7fff;color:#fff;box-shadow:0 0 10px #5b7fff88}
+#allNotes summary{cursor:pointer;color:#0284c7;margin-top:6px}
+.secbtn{font-size:1.15em;font-weight:800;padding:8px 18px;margin:2px;border-radius:999px;border:2px solid #38bdf8;background:#f0f9ff;color:#0369a1;cursor:pointer}
+.secbtn.on{background:linear-gradient(90deg,#ec4899,#f59e0b);color:#fff;box-shadow:0 0 12px rgba(236,72,153,.55);border-color:#ec4899}
+
+/* キャラクター成長カード */
+.charcard{border-color:#f59e0b;background:linear-gradient(180deg,#fff7ed,#fdf2f8)}
+.charrow{display:flex;gap:16px;align-items:center}
+.charface{flex:0 0 auto;width:96px;height:96px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fffbe6,#fde68a 65%,#fbbf24);border:4px solid #f472b6;box-shadow:0 6px 18px rgba(219,39,119,.3);display:flex;align-items:center;justify-content:center;font-size:56px;animation:bob 2.4s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.charinfo{flex:1 1 auto;min-width:0}
+.charname{font-size:26px;font-weight:900;margin:2px 0 6px;color:#9d174d}
+.charbar{height:22px;border-color:#f59e0b;margin:4px 0}
+#charBar{background:linear-gradient(90deg,#ec4899,#f59e0b,#22c55e,#38bdf8,#a78bfa);height:100%;width:0%;transition:width .8s}
+.charnext{font-size:16px;font-weight:800;color:#b45309;margin:4px 0 0}
+#badgeBox{margin-top:10px}
+#badgeGrid{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.badge{width:calc(25% - 8px);min-width:96px;box-sizing:border-box;background:#fff;border:2px solid #fbbf24;border-radius:14px;padding:8px 4px;text-align:center}
+.badge.locked{border-color:#cbd5e1;filter:grayscale(1);opacity:.55}
+.badge .bemoji{font-size:30px;line-height:1.15}
+.badge .bname{font-size:12px;font-weight:800;color:#334155}
+.badge .bhint{font-size:10px;color:#7d8aa0}
+/* 進化のお祝い */
+#evoOverlay{position:fixed;inset:0;background:rgba(80,10,50,.6);z-index:200;display:flex;align-items:center;justify-content:center;overflow:hidden}
+#evoOverlay[hidden]{display:none}
+.evobox{background:linear-gradient(180deg,#ec4899,#a855f7);border:4px solid #fde047;border-radius:26px;padding:28px 34px;text-align:center;box-shadow:0 18px 50px rgba(0,0,0,.45);max-width:86vw;color:#fff}
+.evoemoji{font-size:104px;margin:0;line-height:1.1;animation:evopop .9s ease}
+@keyframes evopop{0%{transform:scale(.2) rotate(-14deg)}55%{transform:scale(1.25) rotate(6deg)}100%{transform:scale(1)}}
+.evotitle{font-size:30px;font-weight:900;color:#fde047;margin:6px 0}
+.confetti{position:absolute;top:-48px;font-size:24px;pointer-events:none;animation-name:cfall;animation-timing-function:linear;animation-fill-mode:forwards;z-index:201}
+@keyframes cfall{to{transform:translateY(110vh) rotate(340deg)}}
