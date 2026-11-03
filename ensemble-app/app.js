@@ -278,7 +278,24 @@ function syncInputBtns() {
   if (k) k.classList.toggle("sel", kb);
   if (p) p.classList.toggle("sel", pad);
 }
-function refreshPadUI() { const w = $("padWrap"); if (w) w.hidden = !padModeOn(); }
+const PAD_WORDS = { 48: "ドン！", 71: "タン！", 74: "シャン！", 69: "シャカ！", 76: "カッ！" };
+function refreshPadUI() {
+  const w = $("padWrap"); if (!w) return;
+  w.hidden = !padModeOn();
+  if (w.hidden) return;
+  const box = $("padBtns"); if (!box) return;
+  box.innerHTML = "";
+  const p = selectedPart();
+  const midis = p ? [...new Set(p.notes.filter((n) => n.unpitched).map((n) => n.midi))] : [];
+  const mk = (label, side, midi, cls) => { const b = document.createElement("button"); b.type = "button"; b.className = "padbtn " + cls; b.dataset.side = side || ""; if (midi) b.dataset.midi = String(midi); b.textContent = label; box.appendChild(b); };
+  if (midis.includes(72) && midis.includes(77)) {
+    // ボンゴは左右2ボタン（○=左・低い太鼓／＋=右・高い太鼓）
+    mk("🥁 ドン！（ひだり）", "L", 72, "padL");
+    mk("🥁 ポン！（みぎ）", "R", 77, "padR");
+  } else {
+    mk("🥁 " + (PAD_WORDS[midis[0]] || "タン！"), null, midis[0], "padOne");
+  }
+}
 function refreshKbUI() {
   if (!song) return;
   const canKb = selectedPart().notes.some((n) => !n.unpitched);
@@ -369,9 +386,10 @@ function pressKey(midi, el) {
   }
 }
 // ---------- 打楽器パッド（画面タップ／スペースキー・マイク不要） ----------
-function playTapSound() {
+function playTapSound(midi) {
   const ctx = ensureCtx(); if (ctx.state === "suspended") ctx.resume();
   const t = ctx.currentTime;
+  if (midi) { percNodes(t, ctx.destination, 1.4, midi); return; }
   // リズムパートを選んでいるときは、その楽器の音でタップを返す
   const p = (typeof selectedPart === "function") ? selectedPart() : null;
   const first = p && p.notes ? p.notes.find((n) => n.unpitched) : null;
@@ -381,13 +399,12 @@ function playTapSound() {
   g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
   osc.connect(g).connect(ctx.destination); osc.start(t); osc.stop(t + 0.11);
 }
-function padTap() {
-  playTapSound();
-  const el = $("padBtn");
+function padTap(side, midi, el) {
+  playTapSound(midi || null);
   if (el) { el.classList.add("hit"); setTimeout(() => el.classList.remove("hit"), 130); }
   if (padSession && padSession.session && playing === padSession.session && mode === "sing") {
     const s = padSession.session;
-    padSession.taps.push(s.conv.toBeat(ensureCtx().currentTime - s.startAt));
+    padSession.taps.push({ beat: s.conv.toBeat(ensureCtx().currentTime - s.startAt), side: side || null });
   }
 }
 function secPerBeat() { return 60 / (song.bpm * (Number($("tempo").value) / 100)); }
@@ -591,6 +608,9 @@ function roundRectPath(ctx, rx, ry, rw, rh, r) {
   ctx.arcTo(rx, ry, rx + rw, ry, rr);
   ctx.closePath();
 }
+// 打楽器ノートに付けるリズムの言葉（長い音=フル、短い音=短縮形）。声に出して読めるように
+const RHYTHM_WORDS = { 48: ["ドン", "ド"], 71: ["タン", "タ"], 74: ["シャン", "シャ"], 69: ["シャカ", "シャ"], 76: ["カッ", "カ"], 72: ["ドン", "ド"], 77: ["ポン", "ポ"] };
+function rhythmWord(n) { const w = RHYTHM_WORDS[n.midi] || ["タン", "タ"]; return n.dur >= 1 ? w[0] : w[1]; }
 function drawRoll(notes, sung, playheadBeat, overlayText, view) {
   const c = $("roll"), ctx = c.getContext("2d");
   const W = c.width, H = c.height; ctx.clearRect(0, 0, W, H);
@@ -625,7 +645,7 @@ function drawRoll(notes, sung, playheadBeat, overlayText, view) {
     ctx.strokeStyle = "rgba(255,255,255,.55)"; ctx.lineWidth = 1; ctx.stroke();
     if (nw >= 26) {
       ctx.fillStyle = "#fff"; ctx.font = "bold 12px system-ui, sans-serif"; ctx.textAlign = "center";
-      ctx.fillText(n.unpitched ? "打" : NOTE_NAMES[((m % 12) + 12) % 12], nx + nw / 2, ny + nh / 2 + 0.5);
+      ctx.fillText(n.unpitched ? rhythmWord(n) : NOTE_NAMES[((m % 12) + 12) % 12], nx + nw / 2, ny + nh / 2 + 0.5);
       ctx.textAlign = "right"; ctx.font = "12px system-ui, sans-serif";
     }
   };
@@ -643,7 +663,7 @@ function drawRoll(notes, sung, playheadBeat, overlayText, view) {
       roundRectPath(ctx, nx, ny, nw, nh, 7); ctx.fillStyle = "#facc15"; ctx.fill(); ctx.restore();
       ctx.strokeStyle = "#fff"; ctx.lineWidth = 2.5; roundRectPath(ctx, nx, ny, nw, nh, 7); ctx.stroke();
       ctx.fillStyle = "#111"; ctx.font = "bold 15px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText(NOTE_NAMES[((m % 12) + 12) % 12], nx + nw / 2, ny + nh / 2 + 0.5);
+      ctx.fillText(n.unpitched ? rhythmWord(n) : NOTE_NAMES[((m % 12) + 12) % 12], nx + nw / 2, ny + nh / 2 + 0.5);
       ctx.textAlign = "right"; ctx.font = "12px system-ui, sans-serif";
     });
   }
@@ -731,11 +751,26 @@ function scorePerformance(notes, rawTrace, onsets = [], presses = null) {
       return { cents: null, timing: null, ok: false, points: 0, label: "× 押せなかった" };
     }
     if (n.unpitched) {
-      // リズム判定: 楽譜の打点に一番近いオンセットを探し、ズレ（拍）で採点する
-      let best = null, bestAbs = Infinity;
-      onsets.forEach((o, oi) => { if (usedOnsets.has(oi)) return; const d = o - n.start; if (Math.abs(d) < bestAbs) { bestAbs = Math.abs(d); best = { d, oi }; } });
+      // リズム判定: 楽譜の打点に一番近いオンセットを探し、ズレ（拍）で採点する。
+      // タップ入力（{beat, side}）のときは、ボンゴの左右（72=左/77=右）も見る: まず同じ太鼓のタップから探し、無ければ反対の太鼓でも拾って「ちがう太鼓」にする
+      const expSide = n.midi === 72 ? "L" : n.midi === 77 ? "R" : null;
+      const ob = (o) => (typeof o === "number" ? o : o.beat);
+      const oside = (o) => (typeof o === "number" ? null : o.side);
+      let best = null, bestAbs = Infinity, bestWrong = false;
+      const consider = (allowWrong) => {
+        onsets.forEach((o, oi) => {
+          if (usedOnsets.has(oi)) return;
+          const sd = oside(o);
+          if (!allowWrong && expSide && sd && sd !== expSide) return;
+          const d = ob(o) - n.start;
+          if (Math.abs(d) < bestAbs) { bestAbs = Math.abs(d); best = { d, oi }; bestWrong = !!(expSide && sd && sd !== expSide); }
+        });
+      };
+      consider(false);
+      if (!(best && bestAbs <= 0.35)) { best = null; bestAbs = Infinity; bestWrong = false; consider(true); }
       if (best && bestAbs <= 0.35) {
         usedOnsets.add(best.oi);
+        if (bestWrong) return { cents: null, timing: best.d, ok: false, points: 40, label: "△ ちがう太鼓（タイミングは合っていた）" };
         const points = bestAbs <= 0.12 ? 100 : bestAbs <= 0.22 ? 70 : 40;
         return { cents: null, timing: best.d, ok: bestAbs <= 0.22, points, label: bestAbs <= 0.12 ? "◎ ぴったり" : bestAbs <= 0.22 ? "○ ほぼ合っている" : "△ " + (best.d > 0 ? "遅れた" : "早かった") };
       }
@@ -1147,10 +1182,17 @@ $("kbMode").addEventListener("change", () => { stopAll(); refreshKbUI(); $("stat
 $("inMicBtn").addEventListener("click", () => { stopAll(); $("kbMode").checked = false; $("padMode").checked = false; refreshKbUI(); $("status").textContent = "マイクで演奏：パートを選んで「演奏バトル！」を押してね（打楽器パートは手拍子でもOK）"; });
 $("inKbBtn").addEventListener("click", () => { stopAll(); $("kbMode").checked = true; $("padMode").checked = false; refreshKbUI(); $("status").textContent = "画面の鍵盤で演奏：光った鍵盤をタッチ（パソコンはアルファベットのキーでもOK）。マイクは使いません"; });
 $("inPadBtn").addEventListener("click", () => { stopAll(); $("padMode").checked = true; $("kbMode").checked = false; refreshKbUI(); $("status").textContent = "画面タップで演奏：オレンジのタイミングで大きなボタンをタップ（パソコンはスペースキーでもOK）。マイクは使いません"; });
-$("padBtn").addEventListener("pointerdown", (ev) => { ev.preventDefault(); padTap(); });
+$("padBtns").addEventListener("pointerdown", (ev) => { const b = ev.target.closest("[data-side]"); if (!b) return; ev.preventDefault(); padTap(b.dataset.side || null, Number(b.dataset.midi) || null, b); });
 // 音符の長さに合わせて長押しすると右クリックメニューが出て演奏が止まるので、鍵盤とパッドでは出さない
-["kbWrap", "padBtn"].forEach((id) => { const el = $(id); if (el) el.addEventListener("contextmenu", (ev) => ev.preventDefault()); });
+["kbWrap", "padWrap"].forEach((id) => { const el = $(id); if (el) el.addEventListener("contextmenu", (ev) => ev.preventDefault()); });
 $("evoClose").addEventListener("click", () => { $("evoOverlay").hidden = true; });
+// テンポの言葉ボタン（🐢ゆったり 等）: スライダーに値をセットして既存の処理に任せる
+document.querySelectorAll(".tempobtn").forEach((b) => b.addEventListener("click", () => {
+  const t = $("tempo"); if (!t) return;
+  t.value = b.dataset.tempo;
+  const tv = $("tempoVal"); if (tv) tv.textContent = b.dataset.tempo;
+  t.dispatchEvent(new Event("input", { bubbles: true })); t.dispatchEvent(new Event("change", { bubbles: true }));
+}));
 document.addEventListener("keydown", (e) => {
   if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
   const t = e.target;

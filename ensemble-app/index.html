@@ -61,6 +61,12 @@
     <label>テンポ <span id="tempoVal">100</span>%
       <input id="tempo" type="range" min="50" max="150" value="100">
     </label>
+    <p class="tempobtns">テンポのめやす：
+      <button type="button" class="tempobtn" data-tempo="55">🐢 ゆったり</button>
+      <button type="button" class="tempobtn" data-tempo="70">🐘 ゆっくり</button>
+      <button type="button" class="tempobtn" data-tempo="85">🚶 あるく</button>
+      <button type="button" class="tempobtn" data-tempo="100">🐇 はやい</button>
+    </p>
     <label><input id="octaveOk" type="checkbox" checked> オクターブ違いも正解にする</label>
     <label id="orderWrap" hidden><input id="orderMode" type="checkbox" checked> 演奏順で再生する（繰り返し・D.S.・コーダあり）</label>
     <label><input id="countIn" type="checkbox" checked> カウントイン（1小節分の予備拍＋大きな数字）</label>
@@ -107,8 +113,8 @@
       <p class="muted">金色に光った鍵盤が「次に押す音」。和音は光った鍵盤を全部押してね。パソコンでは、鍵盤に書かれた文字のキーでも弾けるよ（オクターブごとに同じ形：下の段がドレミファソラシ、上の段が次のドレミファソラシ）。お手本を聞いている間も、鍵盤を押して音を出せるよ。</p>
     </div>
     <div id="padWrap" hidden>
-      <div id="padBtn">🥁 ここをタップ！</div>
-      <p class="muted">オレンジの音のタイミングで、ここをタップ（パソコンはスペースキーでもOK）。マイクは使いません。</p>
+      <div id="padBtns"></div>
+      <p class="muted">オレンジの音のタイミングで、大きなボタンをタップ（パソコンはスペースキーでもOK）。ボンゴは左（ドン）・右（ポン）の2つのボタンで打ち分けてね。マイクは使いません。</p>
     </div>
     <div id="lyricStrip" class="lyrics"></div>
     <p class="muted">青＝お手本の音（ドレミ付き）／ オレンジ＝打楽器の打つ場所 ／ 黄色い太線＝演奏した音の高さ ／ 採点後は緑＝合っている・赤＝ずれている音になります。打楽器パートは、楽器がなくても手拍子で練習できます</p>

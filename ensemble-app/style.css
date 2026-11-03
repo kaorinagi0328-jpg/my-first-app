@@ -78,8 +78,15 @@ summary{cursor:pointer;color:#fbbf24;font-weight:700}
 .inbtn.sel{background:linear-gradient(90deg,#f59e0b,#f43f5e);opacity:1;box-shadow:0 3px 0 #9f1239,0 6px 14px rgba(244,63,94,.5)}
 #kbKeys .kbl{position:absolute;bottom:19px;left:0;right:0;text-align:center;font-size:10px;color:#a16207;font-weight:700;pointer-events:none}
 #kbKeys .kbb .kbl{bottom:3px;color:#fde68a;font-size:9px}
-#padBtn{font-size:32px;font-weight:900;text-align:center;padding:36px 10px;margin-top:8px;border-radius:16px;background:linear-gradient(180deg,#ea580c,#c2410c);color:#fff;cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none;box-shadow:0 4px 14px rgba(234,88,12,.45)}
-#padBtn.hit{background:#059669}
+#padBtns{display:flex;gap:10px;margin-top:8px}
+.padbtn{flex:1 1 0;font-size:30px;font-weight:900;text-align:center;padding:30px 8px;border-radius:16px;color:#fff;cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
+.padbtn.padOne{background:linear-gradient(180deg,#ea580c,#c2410c);box-shadow:0 4px 14px rgba(234,88,12,.45)}
+.padbtn.padL{background:linear-gradient(180deg,#0284c7,#0369a1);box-shadow:0 4px 14px rgba(2,132,199,.5)}
+.padbtn.padR{background:linear-gradient(180deg,#ec4899,#be185d);box-shadow:0 4px 14px rgba(236,72,153,.5)}
+.padbtn.hit{filter:brightness(1.6)}
+.tempobtns{margin:2px 0 6px}
+.tempobtn{font-size:14px;padding:7px 12px}
+
 
 /* キャラクター成長カード */
 .charcard{border-color:#f59e0b;background:linear-gradient(180deg,rgba(120,53,15,.92),rgba(6,78,59,.93))}
