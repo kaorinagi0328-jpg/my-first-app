@@ -89,3 +89,5 @@ summary{cursor:pointer;color:#0284c7;font-weight:700}
 .evotitle{font-size:30px;font-weight:900;color:#fde047;margin:6px 0}
 .confetti{position:absolute;top:-48px;font-size:24px;pointer-events:none;animation-name:cfall;animation-timing-function:linear;animation-fill-mode:forwards;z-index:201}
 @keyframes cfall{to{transform:translateY(110vh) rotate(340deg)}}
+.tempobtns{margin:2px 0 6px}
+.tempobtn{font-size:14px;padding:7px 12px}

@@ -191,10 +191,11 @@ function parseMusicXML(text) {
 }
 
 // ---------- 音程検出（自己相関） ----------
+let quietVoice = false; // 小さい声モード: 音量の下限を下げて、小さい声でも音程を拾う
 function detectPitch(buf, sampleRate) {
   let rms = 0; for (let i = 0; i < buf.length; i++) rms += buf[i] * buf[i];
   rms = Math.sqrt(rms / buf.length);
-  if (rms < 0.01) return null;
+  if (rms < (quietVoice ? 0.003 : 0.01)) return null;
   let r1 = 0, r2 = buf.length - 1;
   const th = 0.2;
   for (let i = 0; i < buf.length / 2; i++) if (Math.abs(buf[i]) < th) { r1 = i; break; }
@@ -1190,6 +1191,14 @@ $("restartBtn").addEventListener("click", () => {
   if (mode === "sing") startSing(); else startModel();
 });
 $("evoClose").addEventListener("click", () => { $("evoOverlay").hidden = true; });
+$("quietMode").addEventListener("change", (e) => { quietVoice = e.target.checked; });
+// テンポの言葉ボタン（🐢ゆったり 等）: スライダーに値をセットして既存の処理に任せる
+document.querySelectorAll(".tempobtn").forEach((b) => b.addEventListener("click", () => {
+  const t = $("tempo"); if (!t) return;
+  t.value = b.dataset.tempo;
+  const tv = $("tempoVal"); if (tv) tv.textContent = b.dataset.tempo;
+  t.dispatchEvent(new Event("input", { bubbles: true })); t.dispatchEvent(new Event("change", { bubbles: true }));
+}));
 updateLevelInfo();
 // 前回読み込んだ曲がこの端末に保存されていれば復元する（?song= 指定があるときは、そちらを優先）
 if (!songParam) {

@@ -61,6 +61,12 @@
     <label>テンポ <span id="tempoVal">100</span>%
       <input id="tempo" type="range" min="50" max="150" value="100">
     </label>
+    <p class="tempobtns">テンポのめやす：
+      <button type="button" class="tempobtn" data-tempo="55">🐢 ゆったり</button>
+      <button type="button" class="tempobtn" data-tempo="70">🐘 ゆっくり</button>
+      <button type="button" class="tempobtn" data-tempo="85">🚶 あるく</button>
+      <button type="button" class="tempobtn" data-tempo="100">🐇 はやい</button>
+    </p>
     <label><input id="octaveOk" type="checkbox" checked> オクターブ違いも正解にする</label>
     <label id="orderWrap" hidden><input id="orderMode" type="checkbox" checked> 演奏順で再生する（繰り返し・D.S.・コーダあり）</label>
     <label><input id="countIn" type="checkbox" checked> カウントイン（1小節分の予備拍＋大きな数字）</label>
@@ -71,11 +77,12 @@
     <h2>🎤 バトル（練習と採点）</h2>
     <p><label>ステージ
       <select id="stageSelect">
-        <option value="1">ステージ1：自分のパートだけ聞く</option>
-        <option value="2">ステージ2：上下両方のパートを聞く</option>
-        <option value="3">ステージ3：相手のパートだけ聞く（上級）</option>
+        <option value="1">🎤 ステージ1：自分のパートだけ聞く</option>
+        <option value="2">👫 ステージ2：上下両方のパートを聞く</option>
+        <option value="3">🥷 ステージ3：相手のパートだけ聞く（上級）</option>
       </select>
     </label></p>
+    <p><label><input id="quietMode" type="checkbox"> 🤫 小さい声モード（小さい声でも音程を拾います。教室で一人ずつ音取りするときに）</label></p>
     <div class="controls">
       <p>
         <button id="warmupBtn" type="button" disabled>🎯 音程合わせチャレンジ</button>
