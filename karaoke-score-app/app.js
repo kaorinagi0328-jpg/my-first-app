@@ -224,7 +224,20 @@ function playTone(midi, at, dur, dest, gainVal = 0.18) {
   osc.connect(g).connect(dest || ctx.destination); osc.start(at); osc.stop(at + dur + 0.05);
   return osc;
 }
-function selectedPart() { return song.parts[Number($("partSelect").value || 0)]; }
+let combinedCache = null;
+// 先生用「両パート」: 全パートの音を時間順に混ぜた仮想パート。歌詞は先頭パート（上）のものだけを使う
+function combinedPart() {
+  if (combinedCache) return combinedCache;
+  const notes = [];
+  song.parts.forEach((p, pi) => p.notes.forEach((n) => notes.push(pi === 0 ? { ...n, partIdx: 0 } : { ...n, partIdx: pi, lyrics: null, lyric: null, lyricSubs: null })));
+  notes.sort((a, b) => (a.start - b.start) || (a.partIdx - b.partIdx));
+  combinedCache = { name: "両パート（先生用）", notes, combined: true };
+  return combinedCache;
+}
+function selectedPart() {
+  if (song && $("partSelect").value === "all") return combinedPart();
+  return song.parts[Number($("partSelect").value || 0)];
+}
 function secPerBeat() { return 60 / (song.bpm * (Number($("tempo").value) / 100)); }
 // テンポ変更に対応した「拍⇔秒」の変換。segs = [{beat, sec, spb}]（区間ごとの1拍の秒数）
 function convFromSegs(segs) {
@@ -370,7 +383,7 @@ function drawRoll(notes, sung, playheadBeat, overlayText, view) {
       ctx.textAlign = "right"; ctx.font = "12px system-ui, sans-serif";
     }
   };
-  notes.forEach((n) => drawNote(n, "#5b7fff"));
+  notes.forEach((n) => drawNote(n, n.partIdx === 1 ? "#f472b6" : "#5b7fff")); // 両パートモードでは下パートをピンクに
   if (sung && sung.scored) {
     sung.scored.forEach((s, i) => drawNote(notes[i], s.ok ? "rgba(34,197,94,.88)" : "rgba(239,68,68,.88)"));
   }
@@ -442,7 +455,19 @@ function scorePerformance(notes, rawTrace) {
     const median = samples[Math.floor(samples.length / 2)];
     let cents = Math.round((median - n.midi) * 100);
     if ($("octaveOk").checked) { while (cents > 600) cents -= 1200; while (cents < -600) cents += 1200; }
-    const a = Math.abs(cents);
+    let a = Math.abs(cents);
+    if (n.partIdx != null && a > 50) {
+      // 両パートモード: 同じ時間に重なっている相手パートの音に合っていれば、そちらで判定する
+      let bestC = null;
+      notes.forEach((m) => {
+        if (m === n || m.partIdx == null || m.partIdx === n.partIdx) return;
+        if (!(m.start < n.start + n.dur && n.start < m.start + m.dur)) return;
+        let c2 = Math.round((median - m.midi) * 100);
+        if ($("octaveOk").checked) { while (c2 > 600) c2 -= 1200; while (c2 < -600) c2 += 1200; }
+        if (bestC === null || Math.abs(c2) < Math.abs(bestC)) bestC = c2;
+      });
+      if (bestC !== null && Math.abs(bestC) < a) { cents = bestC; a = Math.abs(cents); }
+    }
     const points = a <= 50 ? 100 : a <= 100 ? 70 : a <= 150 ? 40 : 0;
     return { cents, ok: a <= 100, points, label: a <= 50 ? "◎ ぴったり" : a <= 100 ? "○ ほぼ合っている" : "× " + (cents > 0 ? "高すぎ" : "低すぎ") };
   });
@@ -483,6 +508,7 @@ function segmentNotes() { return segmentNotesOf(selectedPart()); }
 // ステージに応じたガイド音（採点対象は自分のパートのまま、聞こえる音だけ変える）
 function guideNotesFor(target) {
   const stage = $("stageSelect") ? Number($("stageSelect").value || 1) : 1;
+  if ($("partSelect").value === "all") return target; // 両パートモードは、両方の音がそのままガイドになる
   if (!song || song.parts.length < 2 || stage === 1) return target;
   const selIdx = Number($("partSelect").value || 0);
   const other = song.parts[(selIdx + 1) % song.parts.length];
@@ -492,6 +518,7 @@ function guideNotesFor(target) {
 }
 function stageNote() {
   const stage = $("stageSelect") ? Number($("stageSelect").value || 1) : 1;
+  if ($("partSelect").value === "all") return "（両パートモード：両方のパートが流れます）";
   if (!song || song.parts.length < 2) return "";
   return stage === 2 ? "（ステージ2：両パートが流れます）" : stage === 3 ? "（ステージ3：相手パートだけ流れます。自分のパートを歌ってね）" : "";
 }
@@ -780,10 +807,11 @@ $("wuQuit").addEventListener("click", cancelWarmup);
 
 // ---------- 画面の動作 ----------
 function setSong(s) {
-  song = s;
+  song = s; combinedCache = null;
   $("songTitle").textContent = "曲: " + s.title + "（" + s.parts.length + "パート）";
   const sel = $("partSelect"); sel.innerHTML = "";
   s.parts.forEach((p, i) => { const o = document.createElement("option"); o.value = i; o.textContent = p.name + "（" + p.notes.length + "音）"; sel.appendChild(o); });
+  if (s.parts.length >= 2) { const o = document.createElement("option"); o.value = "all"; o.textContent = "両パート合わせて（先生用）"; sel.appendChild(o); }
   sel.disabled = false; $("playModel").disabled = false; $("singBtn").disabled = false; $("restartBtn").disabled = false; $("warmupBtn").disabled = false;
   const ow = $("orderWrap");
   if (ow) { ow.hidden = !s.order; if (s.order) $("orderMode").checked = true; }
@@ -830,7 +858,7 @@ function pickSection(sec, btn) {
   const notes = segmentNotes(); buildLyrics(notes); drawRoll(notes, null, null);
   $("status").textContent = "部分練習: " + sec.label + "（" + sec.from + "〜" + sec.to + "小節）。歌詞の番は「歌詞」の切り替えで選んでね。お手本を聞くか、歌ってバトル！を押してね";
 }
-$("partSelect").addEventListener("change", () => { if (song) { practiceEnd = null; clearSectionBtns(); if ($("rangeSelect")) $("rangeSelect").value = "all"; $("startMeasure").value = "1"; refreshStartMeasures(); buildLyrics(selectedPart().notes); drawRoll(selectedPart().notes, null, null); } });
+$("partSelect").addEventListener("change", () => { if (song) { practiceEnd = null; clearSectionBtns(); if ($("rangeSelect")) $("rangeSelect").value = "all"; $("startMeasure").value = "1"; refreshStartMeasures(); buildLyrics(selectedPart().notes); drawRoll(selectedPart().notes, null, null); const ss = $("stageSelect"); if (ss) ss.disabled = song.parts.length < 2 || $("partSelect").value === "all"; } });
 $("rangeSelect").addEventListener("change", () => {
   if (!song) return;
   stopAll(); clearSectionBtns();
@@ -1092,7 +1120,7 @@ async function startSing() {
     save.badges = save.badges || {}; save.parts = Array.isArray(save.parts) ? save.parts : []; save.days = Array.isArray(save.days) ? save.days : [];
     const nowD = new Date(); const todayStr = nowD.getFullYear() + "-" + (nowD.getMonth() + 1) + "-" + nowD.getDate();
     if (!save.days.includes(todayStr)) save.days.push(todayStr);
-    const partName = selectedPart().name; if (!save.parts.includes(partName)) save.parts.push(partName);
+    const partName = selectedPart().name; if (!selectedPart().combined && !save.parts.includes(partName)) save.parts.push(partName); // 両パート（先生用）は「両パートチャレンジ」の数に数えない
     const newBadges = [];
     const grant = (id) => { if (!save.badges[id]) { save.badges[id] = true; newBadges.push(id); } };
     grant("first");
