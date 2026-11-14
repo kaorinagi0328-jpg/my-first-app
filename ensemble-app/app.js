@@ -1202,6 +1202,20 @@ $("padBtns").addEventListener("pointerdown", (ev) => { const b = ev.target.close
 // 音符の長さに合わせて長押しすると右クリックメニューが出て演奏が止まるので、鍵盤とパッドでは出さない
 ["kbWrap", "padWrap"].forEach((id) => { const el = $(id); if (el) el.addEventListener("contextmenu", (ev) => ev.preventDefault()); });
 $("evoClose").addEventListener("click", () => { $("evoOverlay").hidden = true; });
+$("exportBtn").addEventListener("click", () => {
+  const s = loadSave();
+  $("transferCode").value = btoa(unescape(encodeURIComponent(JSON.stringify(s))));
+  $("transferMsg").textContent = "コードを出しました（レベル " + levelOf(s.xp || 0).level + "）。全文をコピーして控えてね。";
+});
+$("importBtn").addEventListener("click", () => {
+  try {
+    const obj = JSON.parse(decodeURIComponent(escape(atob($("transferCode").value.trim()))));
+    if (!obj || typeof obj.xp !== "number") throw new Error("bad code");
+    storeSave(obj); updateLevelInfo();
+    $("transferMsg").textContent = "もどしました！ レベル " + levelOf(obj.xp).level + " から再開できます。";
+  } catch { $("transferMsg").textContent = "コードが読み取れませんでした。全文が貼れているか確認してね。"; }
+});
+
 // テンポの言葉ボタン（🐢ゆったり 等）: スライダーに値をセットして既存の処理に任せる
 document.querySelectorAll(".tempobtn").forEach((b) => b.addEventListener("click", () => {
   const t = $("tempo"); if (!t) return;

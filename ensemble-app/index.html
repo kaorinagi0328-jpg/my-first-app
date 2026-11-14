@@ -105,6 +105,13 @@
       <p id="status" class="muted">まず楽譜を読み込んでください</p>
     </div>
     <p id="levelInfo" class="muted"></p>
+    <details class="transfer">
+      <summary>📦 レベルひきつぎ（新しいファイルに変えるとき）</summary>
+      <p class="muted">今のレベル・バッジ・ベスト記録を「ひきつぎコード」で移せます。①このファイルで「コードを出す」を押して、コードを控える（全部コピー）→ ②新しいファイルを開いて、コードを貼って「コードで戻す」を押す。</p>
+      <p><button type="button" id="exportBtn">コードを出す</button> <button type="button" id="importBtn">コードで戻す</button></p>
+      <textarea id="transferCode" rows="3" style="width:100%;box-sizing:border-box" placeholder="ここにコードが出ます／戻すときはここに貼ってね"></textarea>
+      <p id="transferMsg" class="muted"></p>
+    </details>
     <p id="livePitch" class="live"></p>
     <p id="nowInfo" class="nowinfo"></p>
     <canvas id="roll" width="900" height="230"></canvas>
