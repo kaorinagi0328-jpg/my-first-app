@@ -231,19 +231,35 @@ function detectPitch(buf, sampleRate) {
   let rms = 0; for (let i = 0; i < buf.length; i++) rms += buf[i] * buf[i];
   rms = Math.sqrt(rms / buf.length);
   if (rms < 0.01) return null;
-  let r1 = 0, r2 = buf.length - 1;
-  const th = 0.2;
-  for (let i = 0; i < buf.length / 2; i++) if (Math.abs(buf[i]) < th) { r1 = i; break; }
-  for (let i = 1; i < buf.length / 2; i++) if (Math.abs(buf[buf.length - i]) < th) { r2 = buf.length - i; break; }
-  const b = buf.slice(r1, r2); if (b.length < 16) return null;
-  const corr = new Array(b.length).fill(0);
-  for (let lag = 0; lag < b.length; lag++)
-    for (let i = 0; i < b.length - lag; i++) corr[lag] += b[i] * b[i + lag];
-  let d = 0; while (d < corr.length - 1 && corr[d] > corr[d + 1]) d++;
-  let maxVal = -1, maxLag = -1;
-  for (let i = d; i < corr.length; i++) if (corr[i] > maxVal) { maxVal = corr[i]; maxLag = i; }
-  if (maxLag <= 0) return null;
-  return sampleRate / maxLag;
+  const N = buf.length;
+  const minLag = Math.max(2, Math.floor(sampleRate / 1300));
+  const maxLag = Math.min(N - 2, Math.ceil(sampleRate / 60));
+  const nsdf = new Float32Array(maxLag + 2);
+  for (let tau = minLag; tau <= maxLag; tau++) {
+    let acf = 0, den = 0;
+    for (let i = 0; i + tau < N; i++) { const a = buf[i], b = buf[i + tau]; acf += a * b; den += a * a + b * b; }
+    nsdf[tau] = den > 0 ? (2 * acf) / den : 0;
+  }
+  const peaks = [];
+  for (let tau = minLag + 1; tau < maxLag; tau++) {
+    if (nsdf[tau] > 0 && nsdf[tau] >= nsdf[tau - 1] && nsdf[tau] > nsdf[tau + 1]) peaks.push(tau);
+  }
+  if (!peaks.length) return null;
+  let maxPeak = 0; peaks.forEach((t) => { if (nsdf[t] > maxPeak) maxPeak = nsdf[t]; });
+  if (maxPeak < 0.8) return null; // 周期がはっきりしない音は拾わない
+  const thresh = maxPeak * 0.93; // 最初にしきい値を超えたピークを選ぶ（1オクターブ下の誤検出を防ぐ）
+  let tau0 = peaks[peaks.length - 1];
+  for (const t of peaks) { if (nsdf[t] >= thresh) { tau0 = t; break; } }
+  const x0 = nsdf[tau0 - 1], x1 = nsdf[tau0], x2 = nsdf[tau0 + 1];
+  const denom = x0 - 2 * x1 + x2;
+  const shift = denom !== 0 ? Math.max(-1, Math.min(1, 0.5 * (x0 - x2) / denom)) : 0;
+  return sampleRate / (tau0 + shift);
+}
+// マイクは「素の声」で取る: ブラウザの音声処理（ノイズ抑制・自動ゲイン）は歌声・楽器音を
+// ゆがめるので切る。対応していない環境では通常の取得にフォールバックする
+async function getMicStream() {
+  try { return await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }); }
+  catch (e) { return await navigator.mediaDevices.getUserMedia({ audio: true }); }
 }
 const freqToMidiFloat = (f) => 69 + 12 * Math.log2(f / 440);
 
@@ -1044,7 +1060,7 @@ async function startWarmup() {
   $("warmupCard").hidden = false;
   $("warmupCard").scrollIntoView({ behavior: "smooth", block: "center" });
   let stream;
-  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  try { stream = await getMicStream(); }
   catch { $("wuInfo").textContent = "マイクが使えませんでした。ブラウザのマイク許可を確認してください"; return; }
   const ctx = ensureCtx();
   const src = ctx.createMediaStreamSource(stream);
@@ -1381,7 +1397,7 @@ async function startSing() {
   let stream = null, analyser = null;
   const buf = new Float32Array(2048);
   if (!kb && !pad) {
-    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    try { stream = await getMicStream(); }
     catch { $("status").textContent = "マイクが使えませんでした。ブラウザのマイク許可を確認してください"; return; }
   }
   const ctx = ensureCtx();
